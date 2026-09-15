@@ -1,3 +1,4 @@
+const API_URL="https://question-paper-bnak.onrender.com";
 document.addEventListener('DOMContentLoaded', () => {
     loadAllPapers();
 });
@@ -8,7 +9,7 @@ async function loadAllPapers() {
     list.innerHTML = '<p class="loading">Loading papers...</p>';
 
     try {
-        const response = await fetch('/papers');
+        const response = await fetch(`${API_URL}/papers`);
         const papers = await response.json();
         displayPapers(papers);
     } catch (error) {
@@ -34,7 +35,7 @@ async function searchPapers() {
     if (year) params.append('year', year);
 
     try {
-        const response = await fetch(`/search?${params.toString()}`);
+        const response = await fetch(`${API_URL}/search?${params.toString()}`);
         const papers = await response.json();
         displayPapers(papers);
     } catch (error) {
@@ -82,7 +83,7 @@ function displayPapers(papers) {
                     <span class="tag">${p.exam_type || '—'}</span>
                 </div>
                 <div class="paper-actions">
-                    <a href="/download/${encodeURIComponent(p.filename)}" target="_blank">
+                    <a href="${API_URL}/download/${encodeURIComponent(p.filename)}" target="_blank">
                         <button class="download-btn">⬇️ Download</button>
                     </a>
                     ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">🗑️ Delete</button>` : ''}
@@ -101,7 +102,7 @@ async function deletePaper(filename) {
     if (!confirmDelete) return;
 
     try {
-        const response = await fetch(`/delete/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`${API_URL}/delete/${encodeURIComponent(filename)}`, {
             method: 'DELETE',
             headers: { 'X-Admin-Password': password }
         });

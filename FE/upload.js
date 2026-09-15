@@ -1,3 +1,4 @@
+const API_URL="https://question-paper-bank.onrender.com";
 document.getElementById('uploadForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
@@ -23,7 +24,7 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
     showMessage("⏳ Uploading...", "info");
 
     try {
-        const response = await fetch('/upload', {
+        const response = await fetch(`${API_URL}/upload`, {
             method: 'POST',
             body: formData
         });
