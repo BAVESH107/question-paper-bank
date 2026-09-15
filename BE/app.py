@@ -180,6 +180,8 @@ def delete_paper(filename):
         os.remove(file_path)
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
+with app.app_context():
+ init_db()
 
 if __name__ == '__main__':
     init_db()
