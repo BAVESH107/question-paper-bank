@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Upload - Question Paper Bank</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ─── HEADER ─── -->
+    <header>
+        <h1>🔐 Admin Upload</h1>
+        <p class="subtitle">Only admins can upload papers</p>
+    </header>
+
+    <div class="container">
+
+        <div class="notice" style="background: #d1ecf1; border-left-color: #17a2b8; color: #0c5460;">
+            ℹ️ <strong>Admin access only.</strong> Enter your password to upload papers.
+        </div>
+
+        <!-- ─── UPLOAD FORM ─── -->
+        <form id="uploadForm" class="search-section">
+
+            <label>📄 Select PDF File</label>
+            <input type="file" id="file" accept=".pdf" required>
+
+            <label>📖 Subject Name</label>
+            <input type="text" id="subject" placeholder="e.g., DataStructures" required>
+
+            <label>🎓 Semester</label>
+            <select id="semester" required>
+                <option value="" disabled selected>Select Semester</option>
+                <option value="1">Sem 1</option>
+                <option value="2">Sem 2</option>
+                <option value="3">Sem 3</option>
+                <option value="4">Sem 4</option>
+                <option value="5">Sem 5</option>
+                <option value="6">Sem 6</option>
+                <option value="7">Sem 7</option>
+                <option value="8">Sem 8</option>
+            </select>
+
+            <label>🏛️ Department</label>
+            <select id="department" required>
+                <option value="" disabled selected>Select Department</option>
+                <option value="COMP">COMP</option>
+                <option value="IT">IT</option>
+                <option value="ETC">ETC</option>
+                <option value="EEE">EEE</option>
+                <option value="MECH">MECH</option>
+                <option value="CIVIL">CIVIL</option>
+                <option value="VLSI">VLSI</option>
+            </select>
+
+            <label>📅 Year</label>
+            <input type="number" id="year" placeholder="e.g., 2024" required>
+
+            <label>📝 Exam Type</label>
+            <select id="exam_type" required>
+                <option value="" disabled selected>Select Exam Type</option>
+                <option value="1stIT">1st IT</option>
+                <option value="2ndIT">2nd IT</option>
+                <option value="3rdIT">3rd IT</option>
+                <option value="EndSem">End-Sem</option>
+            </select>
+
+            <label>👤 Uploaded By</label>
+            <input type="text" id="uploaded_by" placeholder="Your Name" required>
+
+            <label>🔐 Admin Password</label>
+            <input type="password" id="admin_password" placeholder="Enter admin password" required>
+
+            <div class="button-row" style="margin-top:20px;">
+                <button type="submit">📤 Upload Paper</button>
+                <a href="index.html"><button type="button" class="secondary">← Back to Home</button></a>
+            </div>
+
+        </form>
+
+        <!-- ─── MESSAGE AREA ─── -->
+        <div id="message"></div>
+
+    </div>
+
+    <script src="upload.js"></script>
+</body>
+</html>

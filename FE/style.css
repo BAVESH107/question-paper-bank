@@ -1,0 +1,309 @@
+/* ─── RESET & BASE ─── */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+}
+
+body {
+    background: #f4f6f9;
+    min-height: 100vh;
+    color: #1e293b;
+}
+
+/* ─── HEADER ─── */
+header {
+    background: linear-gradient(135deg, #2563eb, #1e40af);
+    color: white;
+    padding: 30px 20px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    font-size: 32px;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    font-size: 15px;
+    opacity: 0.9;
+}
+
+/* ─── CONTAINER ─── */
+.container {
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+/* ─── SEARCH SECTION ─── */
+.search-section {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    margin-bottom: 25px;
+}
+
+#searchInput {
+    width: 100%;
+    padding: 14px 18px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 16px;
+    outline: none;
+    transition: border 0.2s;
+    margin-bottom: 15px;
+}
+
+#searchInput:focus {
+    border-color: #2563eb;
+}
+
+/* ─── FILTERS ─── */
+.filters {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+}
+
+.filters select,
+.filters input {
+    flex: 1;
+    min-width: 140px;
+    padding: 12px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    outline: none;
+    background: white;
+    transition: border 0.2s;
+}
+
+.filters select:focus,
+.filters input:focus {
+    border-color: #2563eb;
+}
+
+/* ─── BUTTON ROW ─── */
+.button-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 10px;
+    background: #2563eb;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+    flex: 1;
+    min-width: 120px;
+}
+
+button:hover {
+    background: #1d4ed8;
+    transform: translateY(-2px);
+}
+
+button.secondary {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+button.secondary:hover {
+    background: #cbd5e1;
+}
+
+.upload-btn {
+    background: #10b981 !important;
+}
+
+.upload-btn:hover {
+    background: #059669 !important;
+}
+
+/* ─── PAPERS LIST ─── */
+.papers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.paper-card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    border-left: 5px solid #2563eb;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.paper-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+}
+
+.paper-card h3 {
+    color: #1e293b;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.paper-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.tag {
+    background: #eff6ff;
+    color: #2563eb;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.paper-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.paper-actions a {
+    text-decoration: none;
+    flex: 1;
+    min-width: 100px;
+}
+
+.paper-actions button {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+}
+
+.download-btn {
+    background: #10b981 !important;
+}
+
+.download-btn:hover {
+    background: #059669 !important;
+}
+
+/* ─── NOTICE BOX ─── */
+.notice {
+    background: #fff3cd;
+    border-left: 5px solid #ffc107;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #664d03;
+}
+
+.notice code {
+    background: #f8f9fa;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    color: #0d6efd;
+    font-weight: bold;
+}
+
+/* ─── FORM LABELS ─── */
+form label {
+    display: block;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+form input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+form input[type="file"]:hover {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+form input[type="text"],
+form input[type="number"],
+form input[type="password"],
+form select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    outline: none;
+    transition: border 0.2s;
+    background: white;
+}
+
+form input:focus,
+form select:focus {
+    border-color: #2563eb;
+}
+
+/* ─── MESSAGE BOX ─── */
+.message-box {
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-top: 20px;
+    font-size: 15px;
+    font-weight: 500;
+    display: none;
+    line-height: 1.6;
+}
+
+.message-box.success {
+    background: #d4edda;
+    color: #155724;
+    border-left: 5px solid #28a745;
+}
+
+.message-box.error {
+    background: #f8d7da;
+    color: #721c24;
+    border-left: 5px solid #dc3545;
+}
+
+.message-box.info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border-left: 5px solid #17a2b8;
+}
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 600px) {
+    header h1 {
+        font-size: 24px;
+    }
+    .filters {
+        flex-direction: column;
+    }
+    button {
+        width: 100%;
+    }
+}

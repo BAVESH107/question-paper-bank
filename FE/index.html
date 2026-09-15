@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Paper Bank</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ─── HEADER ─── -->
+    <header>
+        <h1>📚 Question Paper Bank</h1>
+        <p class="subtitle">Find past question papers in seconds</p>
+    </header>
+
+    <!-- ─── MAIN CONTAINER ─── -->
+    <div class="container">
+
+        <!-- ─── SEARCH + FILTERS ─── -->
+        <div class="search-section">
+            <input type="text" id="searchInput" placeholder="🔍 Search by subject...">
+
+            <div class="filters">
+                <select id="deptFilter">
+                    <option value="">All Departments</option>
+                    <option value="COMP">COMP</option>
+                    <option value="IT">IT</option>
+                    <option value="ETC">ETC</option>
+                    <option value="EEE">EEE</option>
+                    <option value="MECH">MECH</option>
+                    <option value="CIVIL">CIVIL</option>
+                    <option value="VLSI">VLSI</option>
+                </select>
+
+                <select id="semFilter">
+                    <option value="">All Semesters</option>
+                    <option value="1">Sem 1</option>
+                    <option value="2">Sem 2</option>
+                    <option value="3">Sem 3</option>
+                    <option value="4">Sem 4</option>
+                    <option value="5">Sem 5</option>
+                    <option value="6">Sem 6</option>
+                    <option value="7">Sem 7</option>
+                    <option value="8">Sem 8</option>
+                </select>
+
+                <input type="number" id="yearFilter" placeholder="Year (e.g., 2024)">
+            </div>
+
+            <div class="button-row">
+                <button onclick="searchPapers()">🔍 Search</button>
+                <button onclick="loadAllPapers()" class="secondary">↻ Reset</button>
+            </div>
+        </div>
+
+        <!-- ─── PAPERS LIST ─── -->
+        <div id="papersList" class="papers-list">
+            <p class="loading">Loading papers...</p>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

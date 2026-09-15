@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+papers.db
+*.db
+
+# Uploads (PDFs stay local)
+uploads/
+*.pdf
+
+# Environment
+.env
+venv/
+venv_*/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+#Cloudflare
+cloudflared-windows-amd64.exe
+config.yml
+
+#Large binaries
+*.exe
