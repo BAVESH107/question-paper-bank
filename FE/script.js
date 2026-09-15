@@ -1,4 +1,4 @@
-const API_URL="https://question-paper-bnak.onrender.com";
+const API_URL="https://question-paper-bank.onrender.com";
 document.addEventListener('DOMContentLoaded', () => {
     loadAllPapers();
 });
