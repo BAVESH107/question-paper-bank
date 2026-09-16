@@ -20,7 +20,7 @@ limiter = Limiter(
 # ─── ADMIN PASSWORD ───
 # Default password: admin123
 # CHANGE THIS before sharing!
-ADMIN_PASSWORD_HASH = hashlib.sha256("BAVESH".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256("FERNANDO ALONSO IS THE GOAT 2x WORLD CHAMPION.".encode()).hexdigest()
 
 UPLOAD_FOLDER = 'uploads'
 DB_FILE = 'papers.db'
