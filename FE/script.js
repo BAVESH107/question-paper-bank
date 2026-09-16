@@ -49,12 +49,8 @@ const ADMIN_KEY = "BKL"
 function isAdminMode() {
     // Check URL for ?admin=1
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('admin') === '1') {
-        localStorage.setItem('adminMode', 'true');
-        return true;
-    }
     // Check localStorage
-    return localStorage.getItem('adminMode') === 'true';
+    return localStorage.getItem('adminMode') === ADMIN_KEY;
 }
 
 // ─── DISPLAY PAPERS ───
