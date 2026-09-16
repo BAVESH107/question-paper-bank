@@ -20,7 +20,7 @@ limiter = Limiter(
 # ─── ADMIN PASSWORD ───
 # Default password: admin123
 # CHANGE THIS before sharing!
-ADMIN_PASSWORD_HASH = hashlib.sha256("LENEVO;)69".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256("LENEVO;)60".encode()).hexdigest()
 
 UPLOAD_FOLDER = 'uploads'
 DB_FILE = 'papers.db'
