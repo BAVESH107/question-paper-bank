@@ -34,7 +34,10 @@ document.getElementById('uploadForm').addEventListener('submit', async function(
         if (response.ok) {
             showMessage("✅ " + data.message, "success");
             document.getElementById('uploadForm').reset();
-        } else {
+        }else if(response.status === 429){
+            alert("Too many attempts, Please wait a minute and try again.");
+        } 
+        else {
             showMessage("❌ " + (data.message || data.error), "error");
         }
     } catch (error) {

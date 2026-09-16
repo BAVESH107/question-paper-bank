@@ -109,7 +109,10 @@ async function deletePaper(filename) {
         if (response.ok) {
             alert("✅ " + data.message);
             loadAllPapers();
-        } else {
+        }else if(response.status === 429){
+            alert("Too many attempts, Please wait a minute and try again.");
+        }
+         else {
             alert("❌ " + (data.message || data.error));
         }
     } catch (error) {
