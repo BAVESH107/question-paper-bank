@@ -45,7 +45,7 @@ async function searchPapers() {
 }
 
 // ─── CHECK IF ADMIN MODE ───
-const ADMIN_KEY = "I HAVE A PLAN."
+const ADMIN_KEY = "IHAVEAPLAN."
 function isAdminMode() {
     // Check URL for ?admin=1
     const urlParams = new URLSearchParams(window.location.search);
