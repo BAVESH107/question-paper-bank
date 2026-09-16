@@ -1,17 +1,26 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import sqlite3
 import os
 import re
 import hashlib
 
+
 app = Flask(__name__)
 CORS(app)
+limiter=Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day","50 per hour"],
+    storage_uri="memory://"
+)
 
 # ─── ADMIN PASSWORD ───
 # Default password: admin123
 # CHANGE THIS before sharing!
-ADMIN_PASSWORD_HASH = hashlib.sha256("attendancecompulsory".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256("QP_BankVLSI 25B-VD-010 only".encode()).hexdigest()
 
 UPLOAD_FOLDER = 'uploads'
 DB_FILE = 'papers.db'
@@ -47,6 +56,7 @@ def init_db():
 
 # ─── UPLOAD PAPER (ADMIN ONLY) ───
 @app.route('/upload', methods=['POST'])
+@limiter.limit("5 per minute")
 def upload_paper():
     password = request.form.get('admin_password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -154,6 +164,7 @@ def download_paper(filename):
 
 # ─── DELETE PAPER (ADMIN ONLY) ───
 @app.route('/delete/<filename>', methods=['DELETE'])
+@limiter.limit("5 per minute")
 def delete_paper(filename):
     password = request.headers.get('X-Admin-Password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
