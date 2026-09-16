@@ -45,7 +45,7 @@ async function searchPapers() {
 }
 
 // ─── CHECK IF ADMIN MODE ───
-const ADMIN_KEY = "only BAVESH can know this shi!"
+const ADMIN_KEY = "BKL"
 function isAdminMode() {
     // Check URL for ?admin=1
     const urlParams = new URLSearchParams(window.location.search);

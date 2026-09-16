@@ -10,7 +10,7 @@ import hashlib
 
 app = Flask(__name__)
 CORS(app)
-limiter=Limiter(
+limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per day","50 per hour"],
@@ -20,7 +20,7 @@ limiter=Limiter(
 # ─── ADMIN PASSWORD ───
 # Default password: admin123
 # CHANGE THIS before sharing!
-ADMIN_PASSWORD_HASH = hashlib.sha256("QP_BankVLSI 25B-VD-010 only".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256("BAVESH".encode()).hexdigest()
 
 UPLOAD_FOLDER = 'uploads'
 DB_FILE = 'papers.db'
