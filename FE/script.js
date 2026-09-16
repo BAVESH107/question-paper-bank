@@ -50,7 +50,7 @@ function isAdminMode() {
     // Check URL for ?admin=1
     const urlParams = new URLSearchParams(window.location.search);
     // Check localStorage
-    return localStorage.getItem('adminMode') === ADMIN_KEY;
+    return localStorage.get('admin') === ADMIN_KEY;
 }
 
 // ─── DISPLAY PAPERS ───
