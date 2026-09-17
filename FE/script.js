@@ -80,7 +80,7 @@ function displayPapers(papers) {
                     <span class="tag">${p.exam_type || '—'}</span>
                 </div>
                 <div class="paper-actions">
-                    <a href="${API_URL}/download/${encodeURIComponent(p.filename)}" target="_blank">
+                    <a href="#" onclick="downloadPaper('${p.filename}'); return false;">
                         <button class="download-btn">⬇️ Download</button>
                     </a>
                     ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">🗑️ Delete</button>` : ''}
@@ -117,6 +117,20 @@ async function deletePaper(filename) {
         }
     } catch (error) {
         alert("❌ Delete failed. Is the backend running?");
+        console.error(error);
+    }
+}
+async function downloadPaper(filename) {
+    try {
+        const response = await fetch(`${API_URL}/download/${encodeURIComponent(filename)}`);
+        const data = await response.json();
+        if (data.url) {
+            window.open(data.url, '_blank');
+        } else {
+            alert("❌ Could not get download link");
+        }
+    } catch (error) {
+        alert("❌ Download failed");
         console.error(error);
     }
 }

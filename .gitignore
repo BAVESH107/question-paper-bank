@@ -30,3 +30,7 @@ config.yml
 
 #Large binaries
 *.exe
+
+# Environment
+.env
+BE/.env

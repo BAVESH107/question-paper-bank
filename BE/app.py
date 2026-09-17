@@ -2,29 +2,45 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import sqlite3
+from flask_limiter.errors import RateLimitExceeded
+from supabase import create_client, Client
+import psycopg2
+import psycopg2.extras
 import os
 import re
 import hashlib
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# ─── RATE LIMITING ───
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day","50 per hour"],
+    default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"
 )
 
-# ─── ADMIN PASSWORD ───
-# Default password: admin123
-# CHANGE THIS before sharing!
-ADMIN_PASSWORD_HASH = hashlib.sha256("LENEVO;)60".encode()).hexdigest()
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit_exceeded(e):
+    return jsonify({
+        "error": "rate_limit_exceeded",
+        "message": "Too many attempts. Please wait a minute and try again."
+    }), 429
 
-UPLOAD_FOLDER = 'uploads'
-DB_FILE = 'papers.db'
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# ─── SUPABASE ───
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ─── ADMIN PASSWORD ───
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD_HASH = hashlib.sha256(REDBULLF1TEAM.encode()).hexdigest()
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
@@ -37,10 +53,11 @@ def serve_static(filename):
 
 # ─── DATABASE SETUP ───
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute('''
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS papers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             filename TEXT UNIQUE NOT NULL,
             subject TEXT,
             semester INTEGER,
@@ -48,10 +65,12 @@ def init_db():
             year INTEGER,
             exam_type TEXT,
             uploaded_by TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            supabase_url TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     conn.commit()
+    cursor.close()
     conn.close()
 
 # ─── UPLOAD PAPER (ADMIN ONLY) ───
@@ -86,30 +105,46 @@ def upload_paper():
     clean_subject = re.sub(r'[^A-Za-z0-9]', '', subject)
     generated_filename = f"{clean_subject}_{semester}_{department}_{exam_type}.pdf"
 
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute(
-        "SELECT id FROM papers WHERE LOWER(filename) = LOWER(?)",
-        (generated_filename,)
-    )
+    # Check duplicate
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM papers WHERE LOWER(filename) = LOWER(%s)", (generated_filename,))
     existing = cursor.fetchone()
 
     if existing:
+        cursor.close()
         conn.close()
         return jsonify({
             "error": "duplicate",
             "message": f"'{generated_filename}' already exists!"
         }), 409
 
-    file_path = os.path.join(UPLOAD_FOLDER, generated_filename)
-    file.save(file_path)
+    # Upload to Supabase Storage
+    file_data = file.read()
+    try:
+        supabase.storage.from_('papers').upload(
+            path=generated_filename,
+            file=file_data,
+            file_options={"content-type": "application/pdf"}
+        )
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "error": "storage_error",
+            "message": f"Failed to upload to storage: {str(e)}"
+        }), 500
 
-    conn.execute('''
-        INSERT INTO papers (filename, subject, semester, department, year, exam_type, uploaded_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        generated_filename, subject, semester, department, year, exam_type, uploaded_by
-    ))
+    # Get public URL
+    public_url = supabase.storage.from_('papers').get_public_url(generated_filename)
+
+    # Save to database
+    cursor.execute('''
+        INSERT INTO papers (filename, subject, semester, department, year, exam_type, uploaded_by, supabase_url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (generated_filename, subject, semester, department, year, exam_type, uploaded_by, public_url))
     conn.commit()
+    cursor.close()
     conn.close()
 
     return jsonify({
@@ -119,9 +154,11 @@ def upload_paper():
 # ─── GET ALL PAPERS ───
 @app.route('/papers', methods=['GET'])
 def get_papers():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute("SELECT * FROM papers ORDER BY timestamp DESC")
-    papers = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT * FROM papers ORDER BY timestamp DESC")
+    papers = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
     conn.close()
     return jsonify(papers)
 
@@ -137,30 +174,42 @@ def search_papers():
     params = []
 
     if query:
-        sql += " AND (LOWER(subject) LIKE ? OR LOWER(filename) LIKE ?)"
+        sql += " AND (LOWER(subject) LIKE %s OR LOWER(filename) LIKE %s)"
         params.extend([f"%{query.lower()}%", f"%{query.lower()}%"])
     if dept:
-        sql += " AND department = ?"
+        sql += " AND department = %s"
         params.append(dept)
     if sem:
-        sql += " AND semester = ?"
+        sql += " AND semester = %s"
         params.append(sem)
     if year:
-        sql += " AND year = ?"
+        sql += " AND year = %s"
         params.append(year)
 
     sql += " ORDER BY timestamp DESC"
 
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute(sql, params)
-    papers = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute(sql, params)
+    papers = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
     conn.close()
     return jsonify(papers)
 
-# ─── DOWNLOAD PAPER ───
+# ─── DOWNLOAD PAPER (redirect to Supabase) ───
 @app.route('/download/<filename>', methods=['GET'])
 def download_paper(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not result:
+        return jsonify({"error": "not_found", "message": "Paper not found."}), 404
+
+    return jsonify({"url": result[0]})
 
 # ─── DELETE PAPER (ADMIN ONLY) ───
 @app.route('/delete/<filename>', methods=['DELETE'])
@@ -174,27 +223,34 @@ def delete_paper(filename):
             "message": "Unauthorized. Admin access required."
         }), 403
 
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.execute("SELECT id FROM papers WHERE filename = ?", (filename,))
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM papers WHERE filename = %s", (filename,))
     existing = cursor.fetchone()
 
     if not existing:
+        cursor.close()
         conn.close()
         return jsonify({"error": "not_found", "message": "Paper not found."}), 404
 
-    conn.execute("DELETE FROM papers WHERE filename = ?", (filename,))
+    # Delete from Supabase Storage
+    try:
+        supabase.storage.from_('papers').remove([filename])
+    except Exception as e:
+        print(f"Storage delete failed: {e}")
+
+    # Delete from database
+    cursor.execute("DELETE FROM papers WHERE filename = %s", (filename,))
     conn.commit()
+    cursor.close()
     conn.close()
 
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
     return jsonify({"message": f"'{filename}' deleted successfully!"})
+
+# ─── INITIALIZE DATABASE ───
 with app.app_context():
- init_db()
+    init_db()
 
 if __name__ == '__main__':
-    init_db()
     print("\n📚 Paper Bank Server running on http://localhost:5000\n")
     app.run(port=5000, debug=True)
