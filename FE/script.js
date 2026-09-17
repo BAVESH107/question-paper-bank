@@ -124,7 +124,13 @@ async function downloadPaper(filename) {
         const response = await fetch(`${API_URL}/download/${encodeURIComponent(filename)}`);
         const data = await response.json();
         if (data.url) {
-            window.open(data.url, '_blank');
+            const a = document.createElement('a');
+            a.href = data.url;
+            a.download = filename;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         } else {
             alert("❌ Could not get download link");
         }
