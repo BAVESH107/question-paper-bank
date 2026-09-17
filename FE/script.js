@@ -80,9 +80,8 @@ function displayPapers(papers) {
                     <span class="tag">${p.exam_type || '—'}</span>
                 </div>
                 <div class="paper-actions">
-                    <a href="#" onclick="downloadPaper('${p.filename}'); return false;">
-                        <button class="download-btn">⬇️ Download</button>
-                    </a>
+                    <button class="preview-btn" onclick="previewPaper('${p.supabase_url}')">Preview</button>
+                    <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download</button>
                     ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">🗑️ Delete</button>` : ''}
                 </div>
             </div>
@@ -133,4 +132,12 @@ async function downloadPaper(filename) {
         alert("❌ Download failed");
         console.error(error);
     }
+}
+
+function previewPaper(url){
+    if(!url){
+        alert("NO preview available for this paper.");
+        return;
+    }
+    window.open(url,'_blank');
 }

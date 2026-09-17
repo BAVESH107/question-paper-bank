@@ -1,15 +1,15 @@
-/* ─── FOREST ZEN THEME ─── */
+/* ─── SOFT SLATE + AMBER THEME ─── */
 :root {
-    --bg: #F0FDF4;
-    --header-bg: linear-gradient(135deg, #065F46 0%, #10B981 100%);
+    --bg: #F8FAFC;
+    --header-bg: #0F172A;
     --card: #FFFFFF;
-    --card-hover: #F0FDF4;
-    --accent: #10B981;
-    --accent-hover: #059669;
-    --accent-light: #D1FAE5;
-    --text: #064E3B;
+    --card-hover: #F1F5F9;
+    --accent: #F59E0B;
+    --accent-hover: #D97706;
+    --accent-light: #FEF3C7;
+    --text: #0F172A;
     --text-dim: #64748B;
-    --border: #A7F3D0;
+    --border: #E2E8F0;
     --success: #10B981;
     --danger: #EF4444;
 }
@@ -27,19 +27,18 @@ body {
     color: var(--text);
     min-height: 100vh;
     background-image:
-        radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(6, 95, 70, 0.06) 0%, transparent 50%);
+        radial-gradient(circle at 0% 0%, rgba(245, 158, 11, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(15, 23, 42, 0.04) 0%, transparent 50%);
     background-attachment: fixed;
 }
 
 /* ─── HEADER ─── */
 header {
     background: var(--header-bg);
-    padding: 40px 20px;
+    padding: 35px 20px;
     text-align: center;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 10px 40px rgba(6, 95, 70, 0.2);
 }
 
 header::before {
@@ -48,34 +47,26 @@ header::before {
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    background-image:
-        radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
-    pointer-events: none;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), #FB923C, var(--accent));
 }
 
 header h1 {
-    font-size: 40px;
+    font-size: 38px;
     font-weight: 800;
     color: white;
     letter-spacing: -1px;
     margin-bottom: 8px;
-    position: relative;
-    z-index: 1;
-    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.15);
 }
 
 header h1 span {
-    color: #A7F3D0;
+    color: var(--accent);
 }
 
 .subtitle {
     font-size: 15px;
-    color: rgba(255, 255, 255, 0.9);
+    color: #94A3B8;
     letter-spacing: 0.3px;
-    position: relative;
-    z-index: 1;
 }
 
 /* ─── CONTAINER ─── */
@@ -89,9 +80,9 @@ header h1 span {
 .search-section {
     background: var(--card);
     padding: 28px;
-    border-radius: 20px;
+    border-radius: 16px;
     border: 1px solid var(--border);
-    box-shadow: 0 8px 30px rgba(16, 185, 129, 0.06);
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
     margin-bottom: 25px;
 }
 
@@ -100,7 +91,7 @@ header h1 span {
     padding: 16px 20px;
     background: var(--bg);
     border: 1.5px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 16px;
     color: var(--text);
     outline: none;
@@ -114,7 +105,7 @@ header h1 span {
 
 #searchInput:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
     background: var(--card);
 }
 
@@ -133,7 +124,7 @@ header h1 span {
     padding: 13px 16px;
     background: var(--bg);
     border: 1.5px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 14px;
     color: var(--text);
     outline: none;
@@ -144,7 +135,7 @@ header h1 span {
 .filters select:focus,
 .filters input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
     background: var(--card);
 }
 
@@ -158,8 +149,8 @@ header h1 span {
 button {
     padding: 14px 26px;
     border: none;
-    border-radius: 14px;
-    background: var(--accent);
+    border-radius: 12px;
+    background: var(--header-bg);
     color: white;
     font-size: 15px;
     font-weight: 700;
@@ -171,9 +162,9 @@ button {
 }
 
 button:hover {
-    background: var(--accent-hover);
+    background: #1E293B;
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
 }
 
 button.secondary {
@@ -182,18 +173,18 @@ button.secondary {
 }
 
 button.secondary:hover {
-    background: #A7F3D0;
-    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.2);
+    background: #FDE68A;
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.25);
 }
 
 .upload-btn {
-    background: #059669 !important;
+    background: var(--accent) !important;
     color: white !important;
 }
 
 .upload-btn:hover {
-    background: #047857 !important;
-    box-shadow: 0 10px 25px rgba(5, 150, 105, 0.35) !important;
+    background: var(--accent-hover) !important;
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35) !important;
 }
 
 /* ─── PAPERS LIST ─── */
@@ -205,8 +196,8 @@ button.secondary:hover {
 
 .paper-card {
     background: var(--card);
-    padding: 24px;
-    border-radius: 18px;
+    padding: 22px;
+    border-radius: 16px;
     border: 1px solid var(--border);
     transition: all 0.25s;
     position: relative;
@@ -219,15 +210,15 @@ button.secondary:hover {
     left: 0;
     top: 0;
     bottom: 0;
-    width: 5px;
-    background: var(--header-bg);
-    border-radius: 18px 0 0 18px;
+    width: 4px;
+    background: var(--accent);
+    border-radius: 16px 0 0 16px;
 }
 
 .paper-card:hover {
     transform: translateY(-3px);
     border-color: var(--accent);
-    box-shadow: 0 15px 40px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
 }
 
 .paper-card h3 {
@@ -236,7 +227,7 @@ button.secondary:hover {
     margin-bottom: 12px;
     font-weight: 700;
     letter-spacing: -0.3px;
-    padding-left: 10px;
+    padding-left: 8px;
 }
 
 .paper-meta {
@@ -244,7 +235,7 @@ button.secondary:hover {
     gap: 8px;
     flex-wrap: wrap;
     margin-bottom: 16px;
-    padding-left: 10px;
+    padding-left: 8px;
 }
 
 .tag {
@@ -255,7 +246,6 @@ button.secondary:hover {
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.3px;
-    border: 1px solid var(--border);
 }
 
 .paper-actions {
@@ -265,25 +255,30 @@ button.secondary:hover {
     padding-left: 10px;
 }
 
-.paper-actions a {
-    text-decoration: none;
+.paper-actions button {
     flex: 1;
     min-width: 100px;
-}
-
-.paper-actions button {
-    width: 100%;
     padding: 11px;
     font-size: 14px;
 }
 
 .download-btn {
-    background: #059669 !important;
+    background: var(--success) !important;
 }
 
 .download-btn:hover {
-    background: #047857 !important;
-    box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3) !important;
+    background: #059669 !important;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3) !important;
+}
+
+.preview-btn{
+    background: var(--accent)!important;
+    color: white !important;
+} 
+
+.preview-btn:hover{
+    background: var(--accent-hover) !important;
+    box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3) !important
 }
 
 .delete-btn {
@@ -292,7 +287,7 @@ button.secondary:hover {
 
 .delete-btn:hover {
     background: #DC2626 !important;
-    box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3) !important;
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3) !important;
 }
 
 /* ─── EMPTY / LOADING STATE ─── */
@@ -308,11 +303,11 @@ button.secondary:hover {
     background: var(--accent-light);
     border-left: 4px solid var(--accent);
     padding: 16px 22px;
-    border-radius: 14px;
+    border-radius: 12px;
     margin-bottom: 20px;
     font-size: 14px;
     line-height: 1.6;
-    color: var(--text);
+    color: #78350F;
 }
 
 .notice code {
@@ -340,7 +335,7 @@ form input[type="file"] {
     width: 100%;
     padding: 14px;
     border: 2px dashed var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     background: var(--bg);
     color: var(--text);
     cursor: pointer;
@@ -377,7 +372,7 @@ form select {
     padding: 13px 16px;
     background: var(--bg);
     border: 1.5px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     font-size: 14px;
     color: var(--text);
     outline: none;
@@ -391,14 +386,14 @@ form input::placeholder {
 form input:focus,
 form select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
     background: var(--card);
 }
 
 /* ─── MESSAGE BOX ─── */
 .message-box {
     padding: 16px 22px;
-    border-radius: 14px;
+    border-radius: 12px;
     margin-top: 20px;
     font-size: 15px;
     font-weight: 600;
@@ -432,7 +427,7 @@ form select:focus {
 
 .message-box.info {
     background: var(--accent-light);
-    color: var(--accent-hover);
+    color: #78350F;
     border-left: 4px solid var(--accent);
 }
 
@@ -478,10 +473,10 @@ footer a:hover {
 /* ─── RESPONSIVE ─── */
 @media (max-width: 600px) {
     header {
-        padding: 28px 15px;
+        padding: 25px 15px;
     }
     header h1 {
-        font-size: 30px;
+        font-size: 28px;
     }
     .filters {
         flex-direction: column;
