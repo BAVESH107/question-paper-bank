@@ -10,6 +10,8 @@ import os
 import re
 import hashlib
 from dotenv import load_dotenv
+import requests as req
+from flask import Responses
 
 # Load environment variables
 load_dotenv()
@@ -212,14 +214,12 @@ def download_paper(filename):
     supabase_url = result[0]
 
     # Fetch the PDF from Supabase
-    import requests as req
     response = req.get(supabase_url)
 
     if response.status_code != 200:
         return jsonify({"error": "fetch_failed"}), 500
 
-    # Return the file with download headers
-    from flask import Response
+    # Return the actual PDF with download headers
     return Response(
         response.content,
         mimetype='application/pdf',
