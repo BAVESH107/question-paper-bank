@@ -4,4 +4,4 @@ gunicorn
 Flask-Limiter
 supabase
 psycopg2-binary
-python-dotnev
+python-dotenv
