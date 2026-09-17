@@ -1,15 +1,15 @@
-/* ─── OCEAN BREEZE THEME ─── */
+/* ─── FOREST ZEN THEME ─── */
 :root {
-    --bg: #F0F9FF;
-    --header-bg: linear-gradient(135deg, #0369A1 0%, #0EA5E9 100%);
+    --bg: #F0FDF4;
+    --header-bg: linear-gradient(135deg, #065F46 0%, #10B981 100%);
     --card: #FFFFFF;
-    --card-hover: #F0F9FF;
-    --accent: #0EA5E9;
-    --accent-hover: #0284C7;
-    --accent-light: #E0F2FE;
-    --text: #0C4A6E;
+    --card-hover: #F0FDF4;
+    --accent: #10B981;
+    --accent-hover: #059669;
+    --accent-light: #D1FAE5;
+    --text: #064E3B;
     --text-dim: #64748B;
-    --border: #BAE6FD;
+    --border: #A7F3D0;
     --success: #10B981;
     --danger: #EF4444;
 }
@@ -27,8 +27,8 @@ body {
     color: var(--text);
     min-height: 100vh;
     background-image:
-        radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(3, 105, 161, 0.06) 0%, transparent 50%);
+        radial-gradient(circle at 0% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(6, 95, 70, 0.06) 0%, transparent 50%);
     background-attachment: fixed;
 }
 
@@ -39,7 +39,7 @@ header {
     text-align: center;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 10px 40px rgba(3, 105, 161, 0.15);
+    box-shadow: 0 10px 40px rgba(6, 95, 70, 0.2);
 }
 
 header::before {
@@ -67,12 +67,12 @@ header h1 {
 }
 
 header h1 span {
-    color: #BAE6FD;
+    color: #A7F3D0;
 }
 
 .subtitle {
     font-size: 15px;
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.9);
     letter-spacing: 0.3px;
     position: relative;
     z-index: 1;
@@ -91,7 +91,7 @@ header h1 span {
     padding: 28px;
     border-radius: 20px;
     border: 1px solid var(--border);
-    box-shadow: 0 8px 30px rgba(14, 165, 233, 0.06);
+    box-shadow: 0 8px 30px rgba(16, 185, 129, 0.06);
     margin-bottom: 25px;
 }
 
@@ -114,7 +114,7 @@ header h1 span {
 
 #searchInput:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
     background: var(--card);
 }
 
@@ -144,7 +144,7 @@ header h1 span {
 .filters select:focus,
 .filters input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
     background: var(--card);
 }
 
@@ -173,7 +173,7 @@ button {
 button:hover {
     background: var(--accent-hover);
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
 }
 
 button.secondary {
@@ -182,18 +182,18 @@ button.secondary {
 }
 
 button.secondary:hover {
-    background: #BAE6FD;
-    box-shadow: 0 10px 25px rgba(14, 165, 233, 0.2);
+    background: #A7F3D0;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.2);
 }
 
 .upload-btn {
-    background: var(--success) !important;
+    background: #059669 !important;
     color: white !important;
 }
 
 .upload-btn:hover {
-    background: #059669 !important;
-    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3) !important;
+    background: #047857 !important;
+    box-shadow: 0 10px 25px rgba(5, 150, 105, 0.35) !important;
 }
 
 /* ─── PAPERS LIST ─── */
@@ -227,7 +227,7 @@ button.secondary:hover {
 .paper-card:hover {
     transform: translateY(-3px);
     border-color: var(--accent);
-    box-shadow: 0 15px 40px rgba(14, 165, 233, 0.15);
+    box-shadow: 0 15px 40px rgba(16, 185, 129, 0.15);
 }
 
 .paper-card h3 {
@@ -278,12 +278,12 @@ button.secondary:hover {
 }
 
 .download-btn {
-    background: var(--success) !important;
+    background: #059669 !important;
 }
 
 .download-btn:hover {
-    background: #059669 !important;
-    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3) !important;
+    background: #047857 !important;
+    box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3) !important;
 }
 
 .delete-btn {
@@ -391,7 +391,7 @@ form input::placeholder {
 form input:focus,
 form select:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
     background: var(--card);
 }
 
