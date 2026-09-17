@@ -40,7 +40,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-ADMIN_PASSWORD_HASH = hashlib.sha256("REDBULLF1TEAM01".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256("REDBULLF1TEAM".encode()).hexdigest()
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
