@@ -207,9 +207,26 @@ def download_paper(filename):
     conn.close()
 
     if not result:
-        return jsonify({"error": "not_found", "message": "Paper not found."}), 404
+        return jsonify({"error": "not_found"}), 404
 
-    return jsonify({"url": result[0]})
+    supabase_url = result[0]
+
+    # Fetch the PDF from Supabase
+    import requests as req
+    response = req.get(supabase_url)
+
+    if response.status_code != 200:
+        return jsonify({"error": "fetch_failed"}), 500
+
+    # Return the file with download headers
+    from flask import Response
+    return Response(
+        response.content,
+        mimetype='application/pdf',
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
 
 # ─── DELETE PAPER (ADMIN ONLY) ───
 @app.route('/delete/<filename>', methods=['DELETE'])

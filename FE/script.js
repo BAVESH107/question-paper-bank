@@ -119,26 +119,9 @@ async function deletePaper(filename) {
         console.error(error);
     }
 }
-async function downloadPaper(filename) {
-    try {
-        const response = await fetch(`${API_URL}/download/${encodeURIComponent(filename)}`);
-        const data = await response.json();
-        if (data.url) {
-            const a = document.createElement('a');
-            a.href = data.url;
-            a.download = filename;
-            a.target = '_blank';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        } else {
-            alert("❌ Could not get download link");
-        }
-    } catch (error) {
-        alert("❌ Download failed");
-        console.error(error);
-    }
-}
+ function downloadPaper(filename) {
+    window.location.href = `${API_URL}/download/${encodeURIComponent(filename)}`;
+ }
 
 function previewPaper(url){
     if(!url){
