@@ -254,3 +254,4 @@ with app.app_context():
 if __name__ == '__main__':
     print("\n📚 Paper Bank Server running on http://localhost:5000\n")
     app.run(port=5000, debug=True)
+    #hbcudcucbudb cudbud
