@@ -252,6 +252,6 @@ with app.app_context():
     init_db()
 
 if __name__ == '__main__':
-    print("\n📚 Paper Bank Server running on http://localhost:5000\n")
+    print("\n📚 QStack Server running on http://localhost:5000\n")
     app.run(port=5000, debug=True)
     #hbcudcucbudb cudbud
