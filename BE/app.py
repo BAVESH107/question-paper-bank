@@ -306,7 +306,7 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
         # Generate with Gemini
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt
         )
         ai_text = response.text
