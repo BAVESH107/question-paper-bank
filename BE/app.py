@@ -11,7 +11,7 @@ import re
 import hashlib
 from dotenv import load_dotenv
 import requests as req
-import google-generativeai as genai
+import google.generativeai as genai
 import PyPDF2
 import io
 
