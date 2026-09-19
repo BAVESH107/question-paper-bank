@@ -312,8 +312,9 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
         pdf.set_font("Arial", size=12)
 
         for line in ai_text.split('\n'):
-            clean_line = line.encode('latin-1', 'replace').decode('latin-1')
-            pdf.multi_cell(0, 8, txt=clean_line)
+           clean_line = re.sub(r'[^\x00-\x7F]+',"",line)
+           if clean_line.strip():
+               pdf.multi_cell(0,8,txt=clean_line)
 
         pdf_output = pdf.output(dest='S').encode('latin-1')
 
