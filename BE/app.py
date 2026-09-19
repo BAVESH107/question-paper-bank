@@ -10,12 +10,12 @@ import os
 import re
 import hashlib
 import io
+import time
 import requests as req
 import PyPDF2
 from google import genai
 from fpdf import FPDF
 from dotenv import load_dotenv
-import time
 
 # Load environment variables
 load_dotenv()
@@ -292,7 +292,7 @@ def generate_questions(filename):
             text += page.extract_text()
 
         if not text.strip():
-            return jsonify({"error": "no_text"}), 400
+            return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
 
         text = text[:3000]
 
@@ -304,9 +304,11 @@ Paper content:
 
 Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation, or special symbols. Write in plain readable text."""
 
-        # Generate with Gemini
+        # Generate with Gemini (with retry logic)
         client = genai.Client(api_key=GEMINI_API_KEY)
+
         response = None
+        last_error = None
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
@@ -315,16 +317,20 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
                 )
                 break
             except Exception as e:
-                if "503" in str(e) or "UNAVAILABLE" in str(e):
-                    print(f"Attempt {attempt+1} failed, retrying in 2s...")
-                    time.sleep(2)
+                last_error = str(e)
+                print(f"AI attempt {attempt + 1} failed: {last_error}")
+                if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error:
+                    time.sleep(3)
                 else:
-                    raise e
-        if not response:
+                    break
+
+        if response is None:
             return jsonify({
-                "error":"ai_busy",
-                "message":"AI is busy right now. Please try again in a minute."
+                "error": "ai_busy",
+                "message": f"AI is busy. Please try again in a minute. ({last_error[:100] if last_error else 'Unknown'})"
             }), 503
+
+        ai_text = response.text
 
         # Create PDF
         pdf = FPDF()

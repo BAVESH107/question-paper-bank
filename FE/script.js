@@ -137,25 +137,44 @@ function previewPaper(url) {
 
 // ─── AI QUESTION GENERATOR ───
 async function generateQuestions(filename) {
-    // Open a blank tab immediately to avoid popup blockers
     const newTab = window.open('', '_blank');
-    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px;">🤖 Generating questions... 5-10 seconds.</p>');
+    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px;"> Generating questions... </p>');
 
     try {
         const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
             method: 'POST'
         });
 
-        if (response.ok) {
+        const contentType = response.headers.get("content-type");
+
+        if (response.ok && contentType && contentType.includes("application/pdf")) {
+            // It's a PDF — open it
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             newTab.location.href = url;
         } else {
-            const data = await response.json();
-            newTab.document.body.innerHTML = `<p style="color: #EF4444; text-align:center; font-family: sans-serif; margin-top: 50px;">❌ ${data.message || 'AI failed'}</p>`;
+            // It's an error response
+            let errorMsg = "AI failed";
+            try {
+                const data = await response.json();
+                errorMsg = data.message || data.error || "AI failed";
+            } catch (e) {
+                errorMsg = `Server error (${response.status})`;
+            }
+            newTab.document.body.innerHTML = `
+                <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
+                    <p style="color: #EF4444; font-size: 18px;">❌ ${errorMsg}</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 20px;">This is usually temporary. Please try again in a minute.</p>
+                </div>
+            `;
         }
     } catch (error) {
-        newTab.document.body.innerHTML = '<p style="color: #EF4444; text-align:center; font-family: sans-serif; margin-top: 50px;">❌ Could not reach AI.</p>';
+        newTab.document.body.innerHTML = `
+            <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
+                <p style="color: #EF4444; font-size: 18px;">❌ Could not reach AI</p>
+                <p style="color: #666; font-size: 14px; margin-top: 20px;">Error: ${error.message}</p>
+            </div>
+        `;
         console.error(error);
     }
 }
