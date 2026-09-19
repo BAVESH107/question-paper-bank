@@ -15,6 +15,7 @@ import PyPDF2
 from google import genai
 from fpdf import FPDF
 from dotenv import load_dotenv
+import time
 
 # Load environment variables
 load_dotenv()
@@ -305,11 +306,25 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
 
         # Generate with Gemini
         client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt
-        )
-        ai_text = response.text
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt
+                )
+                break
+            except Exception as e:
+                if "503" in str(e) or "UNAVAILABLE" in str(e):
+                    print(f"Attempt {attempt+1} failed, retrying in 2s...")
+                    time.sleep(2)
+                else:
+                    raise e
+        if not response:
+            return jsonify({
+                "error":"ai_busy",
+                "message":"AI is busy right now. Please try again in a minute."
+            }), 503
 
         # Create PDF
         pdf = FPDF()
