@@ -316,7 +316,7 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
            if clean_line.strip():
                pdf.multi_cell(0,8,txt=clean_line,new_x="LMARGIN",new_y="NEXT")
 
-        pdf_output = pdf.output(dest='S').encode('latin-1')
+        pdf_output = pdf.output(dest='S')
 
         response = make_response(pdf_output)
         response.headers['Content-Type'] = 'application/pdf'
