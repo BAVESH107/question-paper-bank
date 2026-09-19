@@ -11,7 +11,7 @@ async function loadAllPapers() {
     try {
         const response = await fetch(`${API_URL}/papers`);
         const papers = await response.json();
-        displayPapers(papers);
+        Papers(papers);
     } catch (error) {
         list.innerHTML = '<p class="loading">❌ Could not connect to server. Is the backend running?</p>';
         console.error(error);
@@ -82,6 +82,7 @@ function displayPapers(papers) {
                 <div class="paper-actions">
                     <button class="preview-btn" onclick="previewPaper('${p.supabase_url}')">Preview</button>
                     <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download</button>
+                    <button class="ai-btn" onclick="generateQuestions('${p.filename})">AI Questions</button>
                     ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">🗑️ Delete</button>` : ''}
                 </div>
             </div>
@@ -129,4 +130,36 @@ function previewPaper(url){
         return;
     }
     window.open(url,'_blank');
+}
+
+// ─── AI QUESTION GENERATOR ───
+async function generateQuestions(filename) {
+    const modal = document.getElementById('aiModal');
+    const content = document.getElementById('aiContent');
+    modal.style.display = 'flex';
+    content.innerHTML = '<p style="text-align:center;color:#888;">🤖 Generating questions... 5-10 seconds.</p>';
+
+    try {
+        const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+            content.innerHTML = `
+                <h3 style="color: var(--accent); margin-bottom: 15px;">📝 Practice Questions</h3>
+                <div style="white-space: pre-wrap; line-height: 1.8;">${data.questions}</div>
+                <p style="margin-top: 20px; font-size: 13px; color: #888; text-align: center;">AI-generated · Verify with your textbook</p>
+            `;
+        } else {
+            content.innerHTML = `<p style="color: #EF4444;">❌ ${data.message || 'AI failed'}</p>`;
+        }
+    } catch (error) {
+        content.innerHTML = '<p style="color: #EF4444;">❌ Could not reach AI.</p>';
+        console.error(error);
+    }
+}
+
+function closeAIModal() {
+    document.getElementById('aiModal').style.display = 'none';
 }

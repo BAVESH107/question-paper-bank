@@ -11,6 +11,9 @@ import re
 import hashlib
 from dotenv import load_dotenv
 import requests as req
+import google-generativeai as genai
+import PyPDF2
+import io
 
 # Load environment variables
 load_dotenv()
@@ -38,6 +41,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ─── GEMINI AI ───
+GEMINI_API_KEY = os.getnev("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -266,6 +273,52 @@ def delete_paper(filename):
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
     init_db()
+
+# ─── AI QUESTION GENERATOR ───
+@app.route('/generate-questions/<filename>', methods=['POST'])
+@limiter.limit("3 per minute")
+def generate_questions(filename):
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not result:
+            return jsonify({"error": "not_found"}), 404
+
+        pdf_url = result[0]
+        pdf_response = req.get(pdf_url)
+        if pdf_response.status_code != 200:
+            return jsonify({"error": "pdf_fetch_failed"}), 500
+
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
+        text = ""
+        for page in pdf_reader.pages[:3]:
+            text += page.extract_text()
+
+        if not text.strip():
+            return jsonify({"error": "no_text"}), 400
+
+        text = text[:3000]
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare. Make them varied.
+
+Paper content:
+{text}
+
+Output: Just 5 numbered questions."""
+
+        response = model.generate_content(prompt)
+        return jsonify({"questions": response.text, "filename": filename})
+
+    except Exception as e:
+        print(f"AI error: {e}")
+        return jsonify({"error": "ai_failed", "message": str(e)}), 500
+
+
 
 if __name__ == '__main__':
     print("\n📚 QStack Server running on http://localhost:5000\n")

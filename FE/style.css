@@ -491,3 +491,14 @@ footer a:hover {
         margin: 20px auto;
     }
 }
+
+.ai-btn {
+    background: linear-gradient(135deg, #8B5CF6, #EC4899) !important;
+    color: white !important;
+    border: none !important;
+}
+
+.ai-btn:hover {
+    background: linear-gradient(135deg, #7C3AED, #DB2777) !important;
+    box-shadow: 0 10px 25px rgba(139, 92, 246, 0.4) !important;
+}
