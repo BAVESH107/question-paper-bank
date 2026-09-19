@@ -43,10 +43,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ─── GEMINI AI ───
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
-
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
@@ -292,7 +288,12 @@ def generate_questions(filename):
             return jsonify({"error": "no_text"}), 400
 
         text = text[:3000]
-        model = genai.GenerativeModel('gemini-3.6-flash')
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        ai_text = response.text
         prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare for this exam. Make them varied (short answer, long answer, numerical). Number them 1-5.
 
 Paper content:
@@ -316,7 +317,7 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
            if clean_line.strip():
                pdf.multi_cell(0,8,txt=clean_line,new_x="LMARGIN",new_y="NEXT")
 
-        pdf_output = pdf.output(dest='S')
+        pdf_output = bytes(pdf.output(dest='S'))
 
         response = make_response(pdf_output)
         response.headers['Content-Type'] = 'application/pdf'
