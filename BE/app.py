@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, Response
+from flask import Flask, request, jsonify, send_from_directory, Response, make_response
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -9,11 +9,12 @@ import psycopg2.extras
 import os
 import re
 import hashlib
-from dotenv import load_dotenv
-import requests as req
-import google.generativeai as genai
-import PyPDF2
 import io
+import requests as req
+import PyPDF2
+import google.generativeai as genai
+from fpdf import FPDF
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -48,7 +49,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-ADMIN_PASSWORD_HASH = hashlib.sha256("REDBULLF1TEAM".encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
@@ -113,7 +114,6 @@ def upload_paper():
     clean_subject = re.sub(r'[^A-Za-z0-9]', '', subject)
     generated_filename = f"{clean_subject}_{semester}_{department}_{exam_type}.pdf"
 
-    # Check duplicate
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM papers WHERE LOWER(filename) = LOWER(%s)", (generated_filename,))
@@ -143,10 +143,8 @@ def upload_paper():
             "message": f"Failed to upload to storage: {str(e)}"
         }), 500
 
-    # Get public URL
     public_url = supabase.storage.from_('papers').get_public_url(generated_filename)
 
-    # Save to database
     cursor.execute('''
         INSERT INTO papers (filename, subject, semester, department, year, exam_type, uploaded_by, supabase_url)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -204,7 +202,7 @@ def search_papers():
     conn.close()
     return jsonify(papers)
 
-# ─── DOWNLOAD PAPER (redirect to Supabase) ───
+# ─── DOWNLOAD PAPER ───
 @app.route('/download/<filename>', methods=['GET'])
 def download_paper(filename):
     conn = psycopg2.connect(DATABASE_URL)
@@ -218,16 +216,13 @@ def download_paper(filename):
         return jsonify({"error": "not_found"}), 404
 
     supabase_url = result[0]
+    pdf_response = req.get(supabase_url)
 
-    # Fetch the PDF from Supabase
-    response = req.get(supabase_url)
-
-    if response.status_code != 200:
+    if pdf_response.status_code != 200:
         return jsonify({"error": "fetch_failed"}), 500
 
-    # Return the actual PDF with download headers
     return Response(
-        response.content,
+        pdf_response.content,
         mimetype='application/pdf',
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"'
@@ -256,23 +251,17 @@ def delete_paper(filename):
         conn.close()
         return jsonify({"error": "not_found", "message": "Paper not found."}), 404
 
-    # Delete from Supabase Storage
     try:
         supabase.storage.from_('papers').remove([filename])
     except Exception as e:
         print(f"Storage delete failed: {e}")
 
-    # Delete from database
     cursor.execute("DELETE FROM papers WHERE filename = %s", (filename,))
     conn.commit()
     cursor.close()
     conn.close()
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
-
-# ─── INITIALIZE DATABASE ───
-with app.app_context():
-    init_db()
 
 # ─── AI QUESTION GENERATOR ───
 @app.route('/generate-questions/<filename>', methods=['POST'])
@@ -303,24 +292,44 @@ def generate_questions(filename):
             return jsonify({"error": "no_text"}), 400
 
         text = text[:3000]
-        model = genai.GenerativeModel('gemini-3.6-flash')
-        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare. Make them varied.
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare for this exam. Make them varied (short answer, long answer, numerical). Number them 1-5.
 
 Paper content:
 {text}
 
-Output: Just 5 numbered questions."""
+Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation, or special symbols. Write in plain readable text."""
 
         response = model.generate_content(prompt)
-        return jsonify({"questions": response.text, "filename": filename})
+        ai_text = response.text
+
+        # Create PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
+        pdf.ln(5)
+        pdf.set_font("Arial", size=12)
+
+        for line in ai_text.split('\n'):
+            clean_line = line.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 8, txt=clean_line)
+
+        pdf_output = pdf.output(dest='S').encode('latin-1')
+
+        response = make_response(pdf_output)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = 'inline; filename=questions.pdf'
+        return response
 
     except Exception as e:
         print(f"AI error: {e}")
         return jsonify({"error": "ai_failed", "message": str(e)}), 500
 
-
+# ─── INITIALIZE DATABASE ───
+with app.app_context():
+    init_db()
 
 if __name__ == '__main__':
     print("\n📚 QStack Server running on http://localhost:5000\n")
     app.run(port=5000, debug=True)
-    #hbcudcucbudb cudbud

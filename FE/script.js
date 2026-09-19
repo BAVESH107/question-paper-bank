@@ -137,33 +137,25 @@ function previewPaper(url) {
 
 // ─── AI QUESTION GENERATOR ───
 async function generateQuestions(filename) {
-    const modal = document.getElementById('aiModal');
-    const content = document.getElementById('aiContent');
-    modal.style.display = 'flex';
-    content.innerHTML = '<p style="text-align:center;color:#888;">🤖 Generating questions... 5-10 seconds.</p>';
+    // Open a blank tab immediately to avoid popup blockers
+    const newTab = window.open('', '_blank');
+    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px;">🤖 Generating questions... 5-10 seconds.</p>');
 
     try {
         const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
             method: 'POST'
         });
-        const data = await response.json();
 
         if (response.ok) {
-            content.innerHTML = `
-                <h3 style="color: var(--accent); margin-bottom: 15px;">📝 Practice Questions</h3>
-                <div style="white-space: pre-wrap; line-height: 1.8;">${data.questions}</div>
-                <p style="margin-top: 20px; font-size: 13px; color: #888; text-align: center;">AI-generated · Verify with your textbook</p>
-            `;
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            newTab.location.href = url;
         } else {
-            content.innerHTML = `<p style="color: #EF4444;">❌ ${data.message || 'AI failed'}</p>`;
+            const data = await response.json();
+            newTab.document.body.innerHTML = `<p style="color: #EF4444; text-align:center; font-family: sans-serif; margin-top: 50px;">❌ ${data.message || 'AI failed'}</p>`;
         }
     } catch (error) {
-        content.innerHTML = '<p style="color: #EF4444;">❌ Could not reach AI.</p>';
+        newTab.document.body.innerHTML = '<p style="color: #EF4444; text-align:center; font-family: sans-serif; margin-top: 50px;">❌ Could not reach AI.</p>';
         console.error(error);
     }
-}
-
-// ─── CLOSE AI MODAL ───
-function closeAIModal() {
-    document.getElementById('aiModal').style.display = 'none';
 }

@@ -8,3 +8,4 @@ python-dotenv
 requests
 google-generativeai
 PyPDF2
+fpdf2
