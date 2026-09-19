@@ -43,6 +43,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ─── GEMINI AI ───
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
@@ -123,7 +126,6 @@ def upload_paper():
             "message": f"'{generated_filename}' already exists!"
         }), 409
 
-    # Upload to Supabase Storage
     file_data = file.read()
     try:
         supabase.storage.from_('papers').upload(
@@ -264,6 +266,7 @@ def delete_paper(filename):
 @limiter.limit("3 per minute")
 def generate_questions(filename):
     try:
+        # Get paper URL from database
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
@@ -275,10 +278,13 @@ def generate_questions(filename):
             return jsonify({"error": "not_found"}), 404
 
         pdf_url = result[0]
+
+        # Download PDF
         pdf_response = req.get(pdf_url)
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
+        # Extract text from first 3 pages
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
         text = ""
         for page in pdf_reader.pages[:3]:
@@ -288,12 +294,8 @@ def generate_questions(filename):
             return jsonify({"error": "no_text"}), 400
 
         text = text[:3000]
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        ai_text = response.text
+
+        # Build the prompt
         prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare for this exam. Make them varied (short answer, long answer, numerical). Number them 1-5.
 
 Paper content:
@@ -301,7 +303,12 @@ Paper content:
 
 Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation, or special symbols. Write in plain readable text."""
 
-        response = model.generate_content(prompt)
+        # Generate with Gemini
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
         ai_text = response.text
 
         # Create PDF
@@ -313,10 +320,11 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
         pdf.set_font("Arial", size=12)
 
         for line in ai_text.split('\n'):
-           clean_line = re.sub(r'[^\x00-\x7F]+',"",line)
-           if clean_line.strip():
-               pdf.multi_cell(0,8,txt=clean_line,new_x="LMARGIN",new_y="NEXT")
+            clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
+            if clean_line.strip():
+                pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
 
+        # Return PDF
         pdf_output = bytes(pdf.output(dest='S'))
 
         response = make_response(pdf_output)
