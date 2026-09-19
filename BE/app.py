@@ -43,7 +43,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ─── GEMINI AI ───
-GEMINI_API_KEY = os.getnev("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # ─── ADMIN PASSWORD ───
