@@ -12,7 +12,7 @@ import hashlib
 import io
 import requests as req
 import PyPDF2
-import google.generativeai as genai
+import google as genai
 from fpdf import FPDF
 from dotenv import load_dotenv
 
