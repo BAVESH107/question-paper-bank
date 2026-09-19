@@ -303,7 +303,7 @@ def generate_questions(filename):
             return jsonify({"error": "no_text"}), 400
 
         text = text[:3000]
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-3.6-flash')
         prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare. Make them varied.
 
 Paper content:
