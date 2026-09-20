@@ -272,10 +272,13 @@ def generate_questions(filename):
 
         text = text[:2500]  # Smaller for Groq memory
 
-        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare. Make them varied. Number them 1-5.
+        prompt = f"""Based on the following exam paper content, generate 10 practice questions a student could use to prepare. Make them varied(short answer,long answer,numerical). Number them 1-10.
 
 Paper content:
 {text}
+
+Output format: Just 10 numbered questions.
+IMPORTANT: Do NOT ask to draw or refer to diagram, circuits or figures. All questions must be fully self-contained and solvable using only the text provided. Write everything in plain text.""
 
 Output: Just 5 numbered questions. Do NOT use LaTeX or special symbols."""
 
