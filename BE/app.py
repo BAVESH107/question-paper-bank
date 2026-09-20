@@ -284,7 +284,7 @@ Output: Just 5 numbered questions. Do NOT use LaTeX or special symbols."""
             client = Groq(api_key=GROQ_API_KEY)
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 max_tokens=800
             )
             ai_text = chat_completion.choices[0].message.content
