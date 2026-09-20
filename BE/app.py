@@ -4,6 +4,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
 from supabase import create_client, Client
+from groq import Groq
 import psycopg2
 import psycopg2.extras
 import os
@@ -13,11 +14,9 @@ import io
 import time
 import requests as req
 import PyPDF2
-from google import genai
 from fpdf import FPDF
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
@@ -44,8 +43,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ─── GEMINI AI ───
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ─── GROQ AI ───
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -89,10 +88,7 @@ def upload_paper():
     password = request.form.get('admin_password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     if password_hash != ADMIN_PASSWORD_HASH:
-        return jsonify({
-            "error": "unauthorized",
-            "message": "Unauthorized. Admin access required."
-        }), 403
+        return jsonify({"error": "unauthorized", "message": "Unauthorized."}), 403
 
     file = request.files.get('file')
     if not file:
@@ -106,10 +102,7 @@ def upload_paper():
     uploaded_by = request.form.get('uploaded_by', '').strip()
 
     if not all([subject, semester, department, year, exam_type, uploaded_by]):
-        return jsonify({
-            "error": "missing_fields",
-            "message": "Please fill all fields."
-        }), 400
+        return jsonify({"error": "missing_fields", "message": "Please fill all fields."}), 400
 
     clean_subject = re.sub(r'[^A-Za-z0-9]', '', subject)
     generated_filename = f"{clean_subject}_{semester}_{department}_{exam_type}.pdf"
@@ -117,15 +110,10 @@ def upload_paper():
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM papers WHERE LOWER(filename) = LOWER(%s)", (generated_filename,))
-    existing = cursor.fetchone()
-
-    if existing:
+    if cursor.fetchone():
         cursor.close()
         conn.close()
-        return jsonify({
-            "error": "duplicate",
-            "message": f"'{generated_filename}' already exists!"
-        }), 409
+        return jsonify({"error": "duplicate", "message": f"'{generated_filename}' already exists!"}), 409
 
     file_data = file.read()
     try:
@@ -137,10 +125,7 @@ def upload_paper():
     except Exception as e:
         cursor.close()
         conn.close()
-        return jsonify({
-            "error": "storage_error",
-            "message": f"Failed to upload to storage: {str(e)}"
-        }), 500
+        return jsonify({"error": "storage_error", "message": str(e)}), 500
 
     public_url = supabase.storage.from_('papers').get_public_url(generated_filename)
 
@@ -152,9 +137,7 @@ def upload_paper():
     cursor.close()
     conn.close()
 
-    return jsonify({
-        "message": f"Uploaded as '{generated_filename}'!"
-    })
+    return jsonify({"message": f"Uploaded as '{generated_filename}'!"})
 
 # ─── GET ALL PAPERS ───
 @app.route('/papers', methods=['GET'])
@@ -214,18 +197,14 @@ def download_paper(filename):
     if not result:
         return jsonify({"error": "not_found"}), 404
 
-    supabase_url = result[0]
-    pdf_response = req.get(supabase_url)
-
+    pdf_response = req.get(result[0])
     if pdf_response.status_code != 200:
         return jsonify({"error": "fetch_failed"}), 500
 
     return Response(
         pdf_response.content,
         mimetype='application/pdf',
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"'
-        }
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
 # ─── DELETE PAPER (ADMIN ONLY) ───
@@ -235,20 +214,15 @@ def delete_paper(filename):
     password = request.headers.get('X-Admin-Password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
     if password_hash != ADMIN_PASSWORD_HASH:
-        return jsonify({
-            "error": "unauthorized",
-            "message": "Unauthorized. Admin access required."
-        }), 403
+        return jsonify({"error": "unauthorized"}), 403
 
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM papers WHERE filename = %s", (filename,))
-    existing = cursor.fetchone()
-
-    if not existing:
+    if not cursor.fetchone():
         cursor.close()
         conn.close()
-        return jsonify({"error": "not_found", "message": "Paper not found."}), 404
+        return jsonify({"error": "not_found"}), 404
 
     try:
         supabase.storage.from_('papers').remove([filename])
@@ -262,12 +236,12 @@ def delete_paper(filename):
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
 
-# ─── AI QUESTION GENERATOR ───
+# ─── AI QUESTION GENERATOR (GROQ) ───
 @app.route('/generate-questions/<filename>', methods=['POST'])
 @limiter.limit("3 per minute")
 def generate_questions(filename):
     try:
-        # Get paper URL from database
+        # Get paper URL
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
@@ -278,59 +252,47 @@ def generate_questions(filename):
         if not result:
             return jsonify({"error": "not_found"}), 404
 
-        pdf_url = result[0]
-
         # Download PDF
-        pdf_response = req.get(pdf_url)
+        pdf_response = req.get(result[0])
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        # Extract text from first 3 pages
+        # Extract text (only first 2 pages to save memory)
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
         text = ""
-        for page in pdf_reader.pages[:3]:
+        for page in pdf_reader.pages[:2]:
             text += page.extract_text()
+        
+        # Free the PDF from memory
+        del pdf_response
+        del pdf_reader
 
         if not text.strip():
-            return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
+            return jsonify({"error": "no_text"}), 400
 
-        text = text[:3000]
+        text = text[:2500]  # Smaller for Groq memory
 
-        # Build the prompt
-        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare for this exam. Make them varied (short answer, long answer, numerical). Number them 1-5.
+        prompt = f"""Based on the following exam paper content, generate 5 practice questions a student could use to prepare. Make them varied. Number them 1-5.
 
 Paper content:
 {text}
 
-Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation, or special symbols. Write in plain readable text."""
+Output: Just 5 numbered questions. Do NOT use LaTeX or special symbols."""
 
-        # Generate with Gemini (with retry logic)
-        client = genai.Client(api_key=GEMINI_API_KEY)
-
-        response = None
-        last_error = None
-        for attempt in range(3):
-            try:
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=prompt
-                )
-                break
-            except Exception as e:
-                last_error = str(e)
-                print(f"AI attempt {attempt + 1} failed: {last_error}")
-                if "503" in last_error or "UNAVAILABLE" in last_error or "429" in last_error:
-                    time.sleep(3)
-                else:
-                    break
-
-        if response is None:
+        # Call Groq (single attempt, no retry to save memory)
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                max_tokens=800
+            )
+            ai_text = chat_completion.choices[0].message.content
+        except Exception as e:
             return jsonify({
-                "error": "ai_busy",
-                "message": f"AI is busy. Please try again in a minute. ({last_error[:100] if last_error else 'Unknown'})"
-            }), 503
-
-        ai_text = response.text
+                "error": "ai_failed",
+                "message": f"AI failed: {str(e)[:100]}"
+            }), 500
 
         # Create PDF
         pdf = FPDF()
@@ -345,7 +307,6 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
             if clean_line.strip():
                 pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
 
-        # Return PDF
         pdf_output = bytes(pdf.output(dest='S'))
 
         response = make_response(pdf_output)
@@ -355,7 +316,7 @@ Output format: Just the 5 numbered questions. Do NOT use LaTeX, matrix notation,
 
     except Exception as e:
         print(f"AI error: {e}")
-        return jsonify({"error": "ai_failed", "message": str(e)}), 500
+        return jsonify({"error": "ai_failed", "message": str(e)[:100]}), 500
 
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
