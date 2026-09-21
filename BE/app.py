@@ -273,9 +273,16 @@ def generate_questions(filename):
         text = text[:2500]  # Smaller for Groq memory
 
         prompt = f"""Based on the following exam paper content, generate 10 practice questions a student could use to prepare. Make them varied(short answer,long answer,numerical). Number them 1-10.
-
+Rules:
+-Output ONLY the 10 numbered questions (1 to 10).
+-Each question must be single clean sentence or two.
+-Do NOT mention "short answer,long answeror numerical".
+-do NOT add any headings , categories or explanation.
+-Every question must be self-contained and answerable from the text alone.
 Paper content:
 {text}
+
+Output:""
 
 Output format: Just 10 numbered questions.
 IMPORTANT: Do NOT ask to draw or refer to diagram, circuits or figures. All questions must be fully self-contained and solvable using only the text provided. Write everything in plain text.""
@@ -288,7 +295,7 @@ Output: Just 5 numbered questions. Do NOT use LaTeX or special symbols."""
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="openai/gpt-oss-120b",
-                max_tokens=800
+                max_tokens=1500
             )
             ai_text = chat_completion.choices[0].message.content
         except Exception as e:
