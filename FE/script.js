@@ -14,7 +14,7 @@ async function loadAllPapers() {
         const papers = await response.json();
         displayPapers(papers);
     } catch (error) {
-        list.innerHTML = '<p class="loading">❌ Could not connect to server. Is the backend running?</p>';
+        list.innerHTML = '<p class="loading">Could not connect to server. Please try again.</p>';
         console.error(error);
     }
 }
@@ -40,7 +40,7 @@ async function searchPapers() {
         const papers = await response.json();
         displayPapers(papers);
     } catch (error) {
-        list.innerHTML = '<p class="loading">❌ Search failed. Is the backend running?</p>';
+        list.innerHTML = '<p class="loading">Search failed. Please try again.</p>';
         console.error(error);
     }
 }
@@ -60,9 +60,8 @@ function displayPapers(papers) {
 
     if (!papers || papers.length === 0) {
         list.innerHTML = `
-            <div class="paper-card" style="text-align:center; border-left-color:#94a3b8;">
-                <h3>📭 No papers found</h3>
-                <p style="color:#64748b; font-size:14px;">Try a different search or check back later. Or press reset button once.</p>
+            <div class="paper-card" style="text-align:center; padding: 40px;">
+                <p style="color: var(--text-secondary); font-size: 14px;">No papers found. Try a different search or reset the filters.</p>
             </div>
         `;
         return;
@@ -72,18 +71,22 @@ function displayPapers(papers) {
     papers.forEach(p => {
         html += `
             <div class="paper-card">
-                <h3>📄 ${p.subject || p.filename}</h3>
+                <h3>${p.subject || p.filename}</h3>
                 <div class="paper-meta">
-                    <span class="tag">${p.department || '—'}</span>
-                    <span class="tag">Sem ${p.semester || '—'}</span>
-                    <span class="tag">${p.year || '—'}</span>
-                    <span class="tag">${p.exam_type || '—'}</span>
+                    <span>${p.department || '—'}</span>
+                    <span class="dot">·</span>
+                    <span>Semester ${p.semester || '—'}</span>
+                    <span class="dot">·</span>
+                    <span>${p.year || '—'}</span>
+                    <span class="dot">·</span>
+                    <span>${p.exam_type || '—'}</span>
                 </div>
+                <div class="paper-type">Question Paper</div>
                 <div class="paper-actions">
                     <button class="preview-btn" onclick="previewPaper('${p.supabase_url}')">Preview</button>
-                    <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download</button>
-                    <button class="ai-btn" onclick="generateQuestions('${p.filename}')">AI Questions</button>
-                    ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">🗑️ Delete</button>` : ''}
+                    <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download PDF</button>
+                    <button class="ai-btn" onclick="generateQuestions('${p.filename}')">✦ AI Practice</button>
+                    ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">Delete</button>` : ''}
                 </div>
             </div>
         `;
@@ -93,10 +96,10 @@ function displayPapers(papers) {
 
 // ─── DELETE PAPER ───
 async function deletePaper(filename) {
-    const password = prompt("🔐 Enter admin password to delete:");
+    const password = prompt("Enter admin password to delete:");
     if (!password) return;
 
-    const confirmDelete = confirm(`⚠️ Are you sure you want to delete "${filename}"?\n\nThis cannot be undone.`);
+    const confirmDelete = confirm(`Are you sure you want to delete "${filename}"?`);
     if (!confirmDelete) return;
 
     try {
@@ -108,15 +111,15 @@ async function deletePaper(filename) {
         const data = await response.json();
 
         if (response.ok) {
-            alert("✅ " + data.message);
+            alert(data.message);
             loadAllPapers();
         } else if (response.status === 429) {
-            alert("Too many attempts. Please wait a minute and try again.");
+            alert("Too many attempts. Please wait a minute.");
         } else {
-            alert("❌ " + (data.message || data.error));
+            alert(data.message || data.error);
         }
     } catch (error) {
-        alert("❌ Delete failed. Is the backend running?");
+        alert("Delete failed. Please try again.");
         console.error(error);
     }
 }
@@ -129,7 +132,7 @@ function downloadPaper(filename) {
 // ─── PREVIEW PAPER ───
 function previewPaper(url) {
     if (!url) {
-        alert("No preview available for this paper.");
+        alert("No preview available.");
         return;
     }
     window.open(url, '_blank');
@@ -138,7 +141,7 @@ function previewPaper(url) {
 // ─── AI QUESTION GENERATOR ───
 async function generateQuestions(filename) {
     const newTab = window.open('', '_blank');
-    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px;"> Generating questions... </p>');
+    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px; color:#6B7280;">Generating practice questions...</p>');
 
     try {
         const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
@@ -148,12 +151,10 @@ async function generateQuestions(filename) {
         const contentType = response.headers.get("content-type");
 
         if (response.ok && contentType && contentType.includes("application/pdf")) {
-            // It's a PDF — open it
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             newTab.location.href = url;
         } else {
-            // It's an error response
             let errorMsg = "AI failed";
             try {
                 const data = await response.json();
@@ -163,18 +164,22 @@ async function generateQuestions(filename) {
             }
             newTab.document.body.innerHTML = `
                 <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
-                    <p style="color: #EF4444; font-size: 18px;">❌ ${errorMsg}</p>
-                    <p style="color: #666; font-size: 14px; margin-top: 20px;">This is usually temporary. Please try again in a minute.</p>
+                    <p style="color: #DC2626; font-size: 16px;">${errorMsg}</p>
+                    <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Please try again in a minute.</p>
                 </div>
             `;
         }
     } catch (error) {
         newTab.document.body.innerHTML = `
             <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
-                <p style="color: #EF4444; font-size: 18px;">❌ Could not reach AI</p>
-                <p style="color: #666; font-size: 14px; margin-top: 20px;">Error: ${error.message}</p>
+                <p style="color: #DC2626; font-size: 16px;">Could not reach AI</p>
             </div>
         `;
         console.error(error);
     }
+}
+
+// ─── CLOSE AI MODAL ───
+function closeAIModal() {
+    document.getElementById('aiModal').style.display = 'none';
 }
