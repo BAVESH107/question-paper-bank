@@ -81,7 +81,6 @@ function displayPapers(papers) {
                     <span class="dot">·</span>
                     <span>${p.exam_type || '—'}</span>
                 </div>
-                <div class="paper-type">Question Paper</div>
                 <div class="paper-actions">
                     <button class="preview-btn" onclick="previewPaper('${p.supabase_url}')">Preview</button>
                     <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download PDF</button>
