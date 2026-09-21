@@ -272,7 +272,8 @@ def generate_questions(filename):
 
         text = text[:2500]  # Smaller for Groq memory
 
-        prompt = f"""You must generate exactly 10 practice questions a student.
+        prompt = f"""You ae an exam question generator. Read the paper content below and create 10 NEW practice questions on SAME SUBJECT.
+        The paper content contains exam questions. Generate 10 NEW similar questions covering the same topics.
 Rules:
 -Output ONLY the 10 numbered questions (1 to 10).
 -Each question must be single clean sentence or two.
