@@ -272,7 +272,7 @@ def generate_questions(filename):
 
         text = text[:2500]  # Smaller for Groq memory
 
-        prompt = f"""Based on the following exam paper content, generate 10 practice questions a student.
+        prompt = f"""You must generate exactly 10 practice questions a student.
 Rules:
 -Output ONLY the 10 numbered questions (1 to 10).
 -Each question must be single clean sentence or two.
@@ -287,7 +287,7 @@ Output:""
 Output format: Just 10 numbered questions.
 IMPORTANT: Do NOT ask to draw or refer to diagram, circuits or figures. All questions must be fully self-contained and solvable using only the text provided. Write everything in plain text.""
 
-Output: Just 5 numbered questions. Do NOT use LaTeX or special symbols."""
+Output: Just 10 numbered questions. Do NOT use LaTeX or special symbols."""
 
         # Call Groq (single attempt, no retry to save memory)
         try:
