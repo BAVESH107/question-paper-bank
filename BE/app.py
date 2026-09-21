@@ -272,25 +272,22 @@ def generate_questions(filename):
 
         text = text[:2500]  # Smaller for Groq memory
 
-        prompt = f"""You are an exam question generator. Read the exam questions below and create 10 NEW practice questions on the SAME SUBJECT.
+        prompt = f"""Read the exam paper content below and generate 10 practice questions for a student preparing for this exam.
 
-FORBIDDEN — do NOT ask about:
-- Marks, percentages, or weightage
-- Course outcomes, learning objectives, or syllabus
-- Instructions, exam duration, or document structure
-- The document itself ("according to the paper", "as mentioned in...")
-
-REQUIRED — generate questions about:
-- Circuit analysis topics (Kirchhoff's laws, theorems, supernode, supermesh, etc.)
-- Technical concepts (linear/nonlinear elements, graph theory, resonance, etc.)
-- Problem-solving (calculate X, derive Y, find Z)
-
-Output ONLY 10 numbered questions. Nothing else.
+INSTRUCTIONS:
+1. First, understand what subject/topic this paper is about.
+2. Generate 10 questions ONLY on that subject/topic.
+3. Questions must test understanding, calculation, or application — not memorization of the document.
+4. Output ONLY the 10 numbered questions (1 to 10).
+5. Write in PLAIN ENGLISH. No LaTeX, no backslashes, no special symbols.
+6. Do NOT reference the document, marks, instructions, or course outcomes.
+7. Do NOT include categories like "short answer" or "long answer".
+8. Each question must be self-contained and answerable.
 
 Paper content:
 {text}
 
-Generate 10 subject-based questions now:"""
+Generate 10 questions:"""
 
         # Call Groq (single attempt, no retry to save memory)
         try:
