@@ -12,6 +12,7 @@
     --text-muted: #9CA3AF;
     --accent: #2563EB;
     --accent-hover: #1D4ED8;
+    --navy: #1E3A8A;
     --background: #F8FAFC;
     --card: #FFFFFF;
     --border: #E5E7EB;
@@ -24,13 +25,31 @@ body {
     min-height: 100vh;
     font-size: 15px;
     line-height: 1.5;
+    position: relative;
+}
+
+/* ─── SUBTLE BACKGROUND OVERLAY ─── */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(30, 58, 138, 0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
 }
 
 /* ─── HEADER ─── */
 header {
-    background: var(--card);
-    border-bottom: 1px solid var(--border);
-    padding: 24px 20px;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--accent) 100%);
+    padding: 32px 20px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .header-inner {
@@ -38,18 +57,20 @@ header {
     margin: 0 auto;
 }
 
-.brand h1 {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.3px;
-    margin-bottom: 2px;
+.brand {
+    font-size: 32px;
+    font-weight: 800;
+    color: white;
+    letter-spacing: -0.8px;
+    margin-bottom: 4px;
+    line-height: 1;
 }
 
 .tagline {
-    font-size: 13px;
-    color: var(--text-secondary);
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
     font-weight: 500;
+    letter-spacing: 0.2px;
 }
 
 /* ─── CONTAINER ─── */
@@ -57,6 +78,8 @@ header {
     max-width: 960px;
     margin: 24px auto;
     padding: 0 20px;
+    position: relative;
+    z-index: 1;
 }
 
 /* ─── FILTER BAR ─── */
@@ -70,6 +93,7 @@ header {
     border: 1px solid var(--border);
     border-radius: 10px;
     margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .filter-bar select,
@@ -149,6 +173,7 @@ header {
     border: 1px solid var(--border);
     border-radius: 10px;
     transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
 }
 
 .paper-card:hover {
@@ -160,7 +185,7 @@ header {
     font-size: 17px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     letter-spacing: -0.2px;
 }
 
@@ -172,23 +197,11 @@ header {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
-}
-
-.paper-meta span {
-    display: inline;
+    align-items: center;
 }
 
 .paper-meta .dot {
     color: var(--text-muted);
-}
-
-.paper-type {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 14px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
 }
 
 /* ─── PAPER ACTIONS ─── */
@@ -199,7 +212,7 @@ header {
 }
 
 .paper-actions button {
-    padding: 8px 14px;
+    padding: 7px 14px;
     font-size: 13px;
     font-weight: 500;
     border-radius: 6px;
@@ -219,12 +232,13 @@ header {
     background: var(--background);
 }
 
-/* Download — primary blue */
+/* Download — primary blue, slimmer */
 .download-btn {
     background: var(--accent);
     color: white;
     border: 1px solid var(--accent);
     font-weight: 600;
+    padding: 7px 16px;
 }
 
 .download-btn:hover {
@@ -271,6 +285,8 @@ footer {
     color: var(--text-muted);
     font-size: 13px;
     margin-top: 40px;
+    position: relative;
+    z-index: 1;
 }
 
 /* ─── FORM (Upload Page) ─── */
@@ -370,8 +386,8 @@ form input[type="file"]::file-selector-button {
     .paper-actions button {
         flex: 1;
     }
-    .brand h1 {
-        font-size: 20px;
+    .brand {
+        font-size: 26px;
     }
     .paper-card h3 {
         font-size: 16px;
