@@ -257,65 +257,99 @@ def generate_questions(filename):
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        # Extract text (only first 2 pages to save memory)
+        # Extract text from first 4 pages
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
         text = ""
-        for page in pdf_reader.pages[:2]:
+        for page in pdf_reader.pages[1:5]:
             text += page.extract_text()
-        
-        # Free the PDF from memory
+
         del pdf_response
         del pdf_reader
 
         if not text.strip():
             return jsonify({"error": "no_text"}), 400
 
-        text = text[:2500]  # Smaller for Groq memory
+        text = text[:3000]
 
         prompt = f"""Read the exam paper content below and generate 10 practice questions for a student preparing for this exam.
 
 INSTRUCTIONS:
 1. First, understand what subject/topic this paper is about.
 2. Generate 10 questions ONLY on that subject/topic.
-3. Questions must test understanding, calculation, or application — not memorization of the document.
+3. Questions must test understanding, calculation, or application.
 4. Output ONLY the 10 numbered questions (1 to 10).
-5. Write in PLAIN ENGLISH. No LaTeX, no backslashes, no special symbols.
-6. Do NOT reference the document, marks, instructions, or course outcomes.
-7. Do NOT include categories like "short answer" or "long answer".
-8. Each question must be self-contained and answerable.
+5. Write in PLAIN ENGLISH.
+6. Use full words instead of symbols:
+   - "ohm" instead of the ohm symbol
+   - "microfarad" instead of the micro symbol F
+   - "millihenry" instead of mH when used after a number
+   - "volt" instead of V when written after a number
+   - "ampere" instead of A when written after a number
+7. Do NOT use LaTeX, backslashes, dollar signs, curly braces, or backticks.
+8. Do NOT ask questions that refer to "the circuit shown below", "the diagram above", "the figure", or any image. All questions must be solvable from text alone.
+9. Do NOT reference the document, marks, instructions, or course outcomes.
+10. Each question must be fully self-contained.
 
 Paper content:
 {text}
 
 Generate 10 questions:"""
 
-        # Call Groq (single attempt, no retry to save memory)
+        # Call Groq (single attempt)
         try:
             client = Groq(api_key=GROQ_API_KEY)
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
                 model="openai/gpt-oss-120b",
-                max_tokens=1500
+                max_tokens=2000
             )
             ai_text = chat_completion.choices[0].message.content
         except Exception as e:
             return jsonify({
                 "error": "ai_failed",
-                "message": f"AI failed: {str(e)[:100]}"
+                "message": f"AI failed: {str(e)[:150]}"
             }), 500
+
+        # Filter out diagram-dependent questions (backup safety)
+        bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image", "refer to the"]
+        lines = ai_text.split('\n')
+        filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
+        ai_text = '\n'.join(filtered)
 
         # Create PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
-        pdf.ln(5)
+        pdf.ln(8)
         pdf.set_font("Arial", size=12)
 
         for line in ai_text.split('\n'):
+            # Replace symbols with words
+            line = line.replace('Ω', ' ohm ')
+            line = line.replace('µF', ' microfarad ')
+            line = line.replace('µ', ' micro ')
+            line = line.replace('mH', ' millihenry ')
+            line = line.replace('×', ' x ')
+            line = line.replace('≈', ' approximately ')
+
+            # Remove LaTeX artifacts
+            line = line.replace('\\Omega', ' ohm ')
+            line = line.replace('\\mu', ' micro ')
+            line = line.replace('\\text{', '')
+            line = line.replace('\\text', '')
+            line = line.replace('\\', '')
+            line = line.replace('{', '')
+            line = line.replace('}', '')
+            line = line.replace('$', '')
+            line = line.replace('`', '')
+
+            # Strip any remaining non-ASCII
             clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
+
             if clean_line.strip():
                 pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(6)
 
         pdf_output = bytes(pdf.output(dest='S'))
 
@@ -326,7 +360,7 @@ Generate 10 questions:"""
 
     except Exception as e:
         print(f"AI error: {e}")
-        return jsonify({"error": "ai_failed", "message": str(e)[:100]}), 500
+        return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
 
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
