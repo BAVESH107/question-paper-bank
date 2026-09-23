@@ -260,7 +260,7 @@ def generate_questions(filename):
         # Extract text (first 4 pages, skipping cover)
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
         text = ""
-        for page in pdf_reader.pages[1:5]:
+        for page in pdf_reader.pages[1:4]:
             text += page.extract_text()
 
         del pdf_response
@@ -269,7 +269,7 @@ def generate_questions(filename):
         if not text.strip():
             return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
 
-        text = text[:3000]
+        text = text[:2000]
 
         prompt = f"""Read the exam paper content below and generate 10 practice questions for a student preparing for this exam.
 
@@ -290,33 +290,32 @@ Paper content:
 
 Generate 10 questions:"""
 
-        # Call Gemini with retry
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        response = None
-        last_error = None
+        client= genai.Client(api_key=GEMINI_API_KEY)
 
-        for attempt in range(3):
-            try:
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=prompt
-                )
-                break
-            except Exception as e:
-                last_error = str(e)
-                print(f"Gemini attempt {attempt + 1} failed: {last_error}")
-                if "503" in last_error or "429" in last_error or "UNAVAILABLE" in last_error or "RESOURCE_EXHAUSTED" in last_error:
-                    time.sleep(3)
-                else:
-                    break
-
-        if response is None:
-            return jsonify({
-                "error": "ai_busy",
-                "message": f"AI is busy. Please try again in a minute. ({last_error[:100] if last_error else 'Unknown'})"
-            }), 503
-
-        ai_text = response.text
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents = prompt
+            )
+            ai_text = response.text
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Gemini error: {error_msg}")
+            if "503" in error_msg or "UNAVAILABLE" in error_msg:
+                return jsonify({
+                    "error": "ai_busy",
+                    "message": "AI is overloaded right now. Please try again in 1-2 minutes."
+                }), 503
+            elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                return jsonify({
+                    "error": "quota_exceeded",
+                    "message": "Daily quota reached, try again tommorow."
+                }),429
+            else:
+                return jsonify({
+                    "error":"ai_failed",
+                    "message": f"AI failed: {error_msg[:100]}"
+                }),500
 
         # Filter out diagram-dependent questions
         bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
