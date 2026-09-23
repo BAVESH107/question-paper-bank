@@ -4,7 +4,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
 from supabase import create_client, Client
-from groq import Groq
+from google import genai
 import psycopg2
 import psycopg2.extras
 import os
@@ -43,8 +43,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ─── GROQ AI ───
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# ─── GEMINI AI ───
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
@@ -236,7 +236,7 @@ def delete_paper(filename):
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
 
-# ─── AI QUESTION GENERATOR (GROQ) ───
+# ─── AI QUESTION GENERATOR (GEMINI) ───
 @app.route('/generate-questions/<filename>', methods=['POST'])
 @limiter.limit("3 per minute")
 def generate_questions(filename):
@@ -257,7 +257,7 @@ def generate_questions(filename):
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        # Extract text from first 4 pages
+        # Extract text (first 4 pages, skipping cover)
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
         text = ""
         for page in pdf_reader.pages[1:5]:
@@ -267,7 +267,7 @@ def generate_questions(filename):
         del pdf_reader
 
         if not text.strip():
-            return jsonify({"error": "no_text"}), 400
+            return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
 
         text = text[:3000]
 
@@ -279,14 +279,9 @@ INSTRUCTIONS:
 3. Questions must test understanding, calculation, or application.
 4. Output ONLY the 10 numbered questions (1 to 10).
 5. Write in PLAIN ENGLISH.
-6. Use full words instead of symbols:
-   - "ohm" instead of the ohm symbol
-   - "microfarad" instead of the micro symbol F
-   - "millihenry" instead of mH when used after a number
-   - "volt" instead of V when written after a number
-   - "ampere" instead of A when written after a number
+6. Use full words instead of symbols: "ohm" instead of Ω, "microfarad" instead of µF.
 7. Do NOT use LaTeX, backslashes, dollar signs, curly braces, or backticks.
-8. Do NOT ask questions that refer to "the circuit shown below", "the diagram above", "the figure", or any image. All questions must be solvable from text alone.
+8. Do NOT ask questions that refer to "the circuit shown below", "the diagram above", "the figure", or any image.
 9. Do NOT reference the document, marks, instructions, or course outcomes.
 10. Each question must be fully self-contained.
 
@@ -295,23 +290,36 @@ Paper content:
 
 Generate 10 questions:"""
 
-        # Call Groq (single attempt)
-        try:
-            client = Groq(api_key=GROQ_API_KEY)
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-oss-120b",
-                max_tokens=2000
-            )
-            ai_text = chat_completion.choices[0].message.content
-        except Exception as e:
-            return jsonify({
-                "error": "ai_failed",
-                "message": f"AI failed: {str(e)[:150]}"
-            }), 500
+        # Call Gemini with retry
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = None
+        last_error = None
 
-        # Filter out diagram-dependent questions (backup safety)
-        bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image", "refer to the"]
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt
+                )
+                break
+            except Exception as e:
+                last_error = str(e)
+                print(f"Gemini attempt {attempt + 1} failed: {last_error}")
+                if "503" in last_error or "429" in last_error or "UNAVAILABLE" in last_error or "RESOURCE_EXHAUSTED" in last_error:
+                    time.sleep(3)
+                else:
+                    break
+
+        if response is None:
+            return jsonify({
+                "error": "ai_busy",
+                "message": f"AI is busy. Please try again in a minute. ({last_error[:100] if last_error else 'Unknown'})"
+            }), 503
+
+        ai_text = response.text
+
+        # Filter out diagram-dependent questions
+        bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
         lines = ai_text.split('\n')
         filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
         ai_text = '\n'.join(filtered)
@@ -333,7 +341,7 @@ Generate 10 questions:"""
             line = line.replace('×', ' x ')
             line = line.replace('≈', ' approximately ')
 
-            # Remove LaTeX artifacts
+            # Clean LaTeX artifacts
             line = line.replace('\\Omega', ' ohm ')
             line = line.replace('\\mu', ' micro ')
             line = line.replace('\\text{', '')
@@ -344,7 +352,6 @@ Generate 10 questions:"""
             line = line.replace('$', '')
             line = line.replace('`', '')
 
-            # Strip any remaining non-ASCII
             clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
 
             if clean_line.strip():

@@ -395,6 +395,10 @@ footer {
   font-size: 13px;
 }
 
+.whatsapp-btn:hover {
+    background: #128C7E;
+}
+
 .footer-email {
     font-size: 13px;
     color: var(--text-secondary);
