@@ -377,34 +377,49 @@ footer {
 }
 
 .footer-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 14px;
+    margin-bottom: 12px;
+}
+
+.footer-contacts {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
 }
 
 .whatsapp-btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     background: #25D366;
     color: white;
-    padding: 12px 24px;
-    border-radius: 8px;
-    font-size: 14px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 13px;
     font-weight: 600;
     text-decoration: none;
-    transition: background 0.15s, transform 0.15s;
-    margin-bottom: 20px;
+    transition: background 0.15s;
 }
 
 .whatsapp-btn:hover {
     background: #128C7E;
-    transform: translateY(-2px);
+}
+
+.footer-email {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .footer-note {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
-    margin-top: 20px;
+    margin-top: 16px;
 }
 
 /* ─── MOBILE RESPONSIVE ─── */
@@ -502,7 +517,8 @@ footer {
     }
     .whatsapp-btn{
         width: 100%;
-        padding: 14px;
-        font-size: 15px;
+        justify-content: center;
+        padding: 10px;
+        font-size: 14px;
     }
 }
