@@ -252,50 +252,52 @@ def generate_questions(filename):
         if not result:
             return jsonify({"error": "not_found"}), 404
 
-        # Download PDF
-        pdf_response = req.get(result[0])
+        # Stream PDF (only read first 2MB to save memory)
+        pdf_response = req.get(result[0], stream=True)
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        # Extract text (first 4 pages, skipping cover)
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_response.content))
+        pdf_bytes = pdf_response.raw.read(2 * 1024 * 1024)
+        del pdf_response   # Free the response object immediately
+
+        # Extract text from only 2 content pages
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
-        for page in pdf_reader.pages[1:4]:
+        for page in pdf_reader.pages[1:3]:
             text += page.extract_text()
 
-        del pdf_response
-        del pdf_reader
+        del pdf_reader   # Free PDF reader
+        del pdf_bytes    # Free raw bytes
 
         if not text.strip():
             return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
 
-        text = text[:2000]
+        text = text[:1500]
 
         prompt = f"""Read the exam paper content below and generate 10 practice questions for a student preparing for this exam.
 
 INSTRUCTIONS:
 1. First, understand what subject/topic this paper is about.
 2. Generate 10 questions ONLY on that subject/topic.
-3. Questions must test understanding, calculation, or application.
-4. Output ONLY the 10 numbered questions (1 to 10).
-5. Write in PLAIN ENGLISH.
-6. Use full words instead of symbols: "ohm" instead of Ω, "microfarad" instead of µF.
-7. Do NOT use LaTeX, backslashes, dollar signs, curly braces, or backticks.
-8. Do NOT ask questions that refer to "the circuit shown below", "the diagram above", "the figure", or any image.
-9. Do NOT reference the document, marks, instructions, or course outcomes.
-10. Each question must be fully self-contained.
+3. Output ONLY the 10 numbered questions (1 to 10).
+4. Write in PLAIN ENGLISH. Use "ohm" instead of Ω, "microfarad" instead of µF.
+5. Do NOT use LaTeX, backslashes, dollar signs, curly braces, or backticks.
+6. Do NOT ask questions that refer to "shown below", "the diagram", "the figure", or any image.
+7. Do NOT reference the document, marks, or instructions.
+8. Each question must be self-contained.
 
 Paper content:
 {text}
 
 Generate 10 questions:"""
 
-        client= genai.Client(api_key=GEMINI_API_KEY)
+        # Single attempt with Gemini
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
         try:
             response = client.models.generate_content(
                 model="gemini-3.6-flash",
-                contents = prompt
+                contents=prompt
             )
             ai_text = response.text
         except Exception as e:
@@ -304,18 +306,22 @@ Generate 10 questions:"""
             if "503" in error_msg or "UNAVAILABLE" in error_msg:
                 return jsonify({
                     "error": "ai_busy",
-                    "message": "AI is overloaded right now. Please try again in 1-2 minutes."
+                    "message": "AI is overloaded. Please try again in 1-2 minutes."
                 }), 503
             elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
                 return jsonify({
                     "error": "quota_exceeded",
-                    "message": "Daily quota reached, try again tommorow."
-                }),429
+                    "message": "Daily AI quota reached. Try again tomorrow."
+                }), 429
             else:
                 return jsonify({
-                    "error":"ai_failed",
+                    "error": "ai_failed",
                     "message": f"AI failed: {error_msg[:100]}"
-                }),500
+                }), 500
+
+        # Free prompt and text
+        del prompt
+        del text
 
         # Filter out diagram-dependent questions
         bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
@@ -332,15 +338,12 @@ Generate 10 questions:"""
         pdf.set_font("Arial", size=12)
 
         for line in ai_text.split('\n'):
-            # Replace symbols with words
             line = line.replace('Ω', ' ohm ')
             line = line.replace('µF', ' microfarad ')
             line = line.replace('µ', ' micro ')
             line = line.replace('mH', ' millihenry ')
             line = line.replace('×', ' x ')
             line = line.replace('≈', ' approximately ')
-
-            # Clean LaTeX artifacts
             line = line.replace('\\Omega', ' ohm ')
             line = line.replace('\\mu', ' micro ')
             line = line.replace('\\text{', '')
@@ -358,6 +361,7 @@ Generate 10 questions:"""
                 pdf.ln(6)
 
         pdf_output = bytes(pdf.output(dest='S'))
+        del pdf   # Free FPDF object
 
         response = make_response(pdf_output)
         response.headers['Content-Type'] = 'application/pdf'
@@ -367,7 +371,6 @@ Generate 10 questions:"""
     except Exception as e:
         print(f"AI error: {e}")
         return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
-
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
     init_db()
