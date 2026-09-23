@@ -48,7 +48,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256(GECVLSI123.encode()).hexdigest()
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
@@ -86,7 +86,7 @@ def init_db():
 @limiter.limit("5 per minute")
 def upload_paper():
     password = request.form.get('admin_password', '')
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    password_hash = hashlib.sha256(ignite1.encode()).hexdigest()
     if password_hash != ADMIN_PASSWORD_HASH:
         return jsonify({"error": "unauthorized", "message": "Unauthorized."}), 403
 
