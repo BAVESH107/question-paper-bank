@@ -517,8 +517,8 @@ footer {
     }
     .whatsapp-btn{
         width: 100%;
-        justify-content: center;
-        padding: 10px;
-        font-size: 14px;
+        justify-content: left;
+        padding: 8px;
+        font-size: 10px;
     }
 }
