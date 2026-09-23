@@ -83,8 +83,8 @@ function displayPapers(papers) {
                 </div>
                 <div class="paper-actions">
                     <button class="preview-btn" onclick="previewPaper('${p.supabase_url}')">Preview</button>
-                    <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download PDF</button>
                     <button class="ai-btn" onclick="generateQuestions('${p.filename}')">✦ AI Practice</button>
+                    <button class="download-btn" onclick="downloadPaper('${p.filename}')">Download PDF</button>
                     ${adminMode ? `<button class="delete-btn" onclick="deletePaper('${p.filename}')">Delete</button>` : ''}
                 </div>
             </div>

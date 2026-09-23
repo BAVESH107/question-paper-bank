@@ -449,7 +449,12 @@ form input[type="file"]::file-selector-button {
         white-space: normal;
         line-height: 1.3;
     }
-
+    .paper-actions .download-btn{
+        grid-column: 1/ -1;
+    }
+    .paper-actions .delete-btn{
+        grid-column: 1 /-1;
+    }
     /* FOOTER */
     footer {
         padding: 30px 16px;
