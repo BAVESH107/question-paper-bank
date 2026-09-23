@@ -384,26 +384,15 @@ footer {
 }
 
 .footer-contacts {
-    display: flex;
-    gap: 16px;
-    justify-content: center;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
+    gap: 10px;
 }
 
 .whatsapp-btn {
-    display: inline-flex;
-    align-items: left;
-    gap: 6px;
-    background: #13af4c;
-    color: white;
-    padding: 7px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: background 0.15s;
+  padding: 8px 16px;
+  font-size: 13px;
 }
 
 .whatsapp-btn:hover {
