@@ -1,0 +1,12 @@
+{
+    "funtions":{
+        "api/*.py":{
+            "runtime": "python3.12",
+            "maxDuration": 30
+        }
+    },
+    "rewrites":[{
+        "source":"/api/(.*)",
+        "destination": "/api/generate.py"
+    }]
+}
