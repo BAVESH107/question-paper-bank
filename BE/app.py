@@ -299,6 +299,14 @@ Generate 10 questions:"""
         ]
         if not any(GEMINI_KEYS):
             GEMINI_KEYS = [os.getenv("GEMINI_API_KEY")]
+        # DEBUG — remove after fixing
+        print("=== DEBUG ENV VARS ===")
+        print(f"KEY_1: {os.getenv('GEMINI_API_KEY_1')[:15] if os.getenv('GEMINI_API_KEY_1') else 'NOT FOUND'}")
+        print(f"KEY_2: {os.getenv('GEMINI_API_KEY_2')[:15] if os.getenv('GEMINI_API_KEY_2') else 'NOT FOUND'}")
+        print(f"KEY_3: {os.getenv('GEMINI_API_KEY_3')[:15] if os.getenv('GEMINI_API_KEY_3') else 'NOT FOUND'}")
+        print(f"OLD KEY: {os.getenv('GEMINI_API_KEY')[:15] if os.getenv('GEMINI_API_KEY') else 'NOT FOUND'}")
+        print("======================")
+
         # ═══════════════════════════════════════════════════════════════
 
         ai_text = None
