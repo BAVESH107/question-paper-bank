@@ -48,7 +48,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-ADMIN_PASSWORD_HASH = hashlib.sha256(GECVLSI123.encode()).hexdigest()
+ADMIN_PASSWORD_HASH = hashlib.sha256(GECVLSI.encode()).hexdigest()
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
