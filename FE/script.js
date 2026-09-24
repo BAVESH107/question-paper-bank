@@ -137,41 +137,61 @@ function previewPaper(url) {
     window.open(url, '_blank');
 }
 
-// ─── AI QUESTION GENERATOR ───
+// ─── AI QUESTION GENERATOR (UPDATED) ───
 async function generateQuestions(filename) {
+    // Open a new tab immediately to show loading state
     const newTab = window.open('', '_blank');
-    newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px; color:#6B7280;">Generating practice questions...</p>');
+    newTab.document.write(`
+        <div style="text-align:center; font-family: sans-serif; margin-top: 50px; color:#6B7280;">
+            <h2>Generating practice questions...</h2>
+            <p>This may take up to 15 seconds. Please do not close this tab.</p>
+        </div>
+    `);
 
     try {
+        // FIXED: Using API_URL constant and the correct endpoint
         const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
             method: 'POST'
         });
 
         const contentType = response.headers.get("content-type");
 
+        // Handle Rate Limiting (Too many requests)
+        if (response.status === 429) {
+            newTab.document.body.innerHTML = `
+                <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
+                    <p style="color: #DC2626; font-size: 18px; font-weight: bold;">Too many requests!</p>
+                    <p style="color: #6B7280; font-size: 14px; margin-top: 10px;">You have reached the limit. Please wait 60 seconds before trying again.</p>
+                </div>`;
+            return;
+        }
+
+        // If successful and it's a PDF
         if (response.ok && contentType && contentType.includes("application/pdf")) {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             newTab.location.href = url;
         } else {
-            let errorMsg = "AI failed";
+            // Handle other errors (like scanned PDFs or server crashes)
+            let errorMsg = "AI generation failed.";
             try {
                 const data = await response.json();
-                errorMsg = data.message || data.error || "AI failed";
+                errorMsg = data.message || data.error || errorMsg;
             } catch (e) {
                 errorMsg = `Server error (${response.status})`;
             }
             newTab.document.body.innerHTML = `
                 <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
                     <p style="color: #DC2626; font-size: 16px;">${errorMsg}</p>
-                    <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Please try again in a minute.</p>
+                    <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Please try again later.</p>
                 </div>
             `;
         }
     } catch (error) {
         newTab.document.body.innerHTML = `
             <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
-                <p style="color: #DC2626; font-size: 16px;">Could not reach AI</p>
+                <p style="color: #DC2626; font-size: 16px;">Could not reach AI server.</p>
+                <p style="color: #6B7280; font-size: 13px; margin-top: 16px;">Please check your internet connection and try again.</p>
             </div>
         `;
         console.error(error);

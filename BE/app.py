@@ -12,7 +12,7 @@ import hashlib
 import io
 import time
 import requests as req
-import PyPDF2
+import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -77,6 +77,7 @@ def init_db():
             exam_type TEXT,
             uploaded_by TEXT,
             supabase_url TEXT,
+            generated_questions TEXT, -- NEW COLUMN FOR CACHING
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -239,41 +240,64 @@ def delete_paper(filename):
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
 
-# ─── AI QUESTION GENERATOR (GEMINI) ───
 @app.route('/generate-questions/<filename>', methods=['POST'])
-@limiter.limit("3 per minute")
+@limiter.limit("5 per minute") # Increased slightly since it's mostly DB reads now
 def generate_questions(filename):
     try:
+        # 1. Connect to DB and check if questions already exist
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
-        cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
+        cursor.execute("SELECT supabase_url, generated_questions FROM papers WHERE filename = %s", (filename,))
         result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
+        
         if not result:
+            cursor.close()
+            conn.close()
             return jsonify({"error": "not_found"}), 404
 
-        pdf_response = req.get(result[0], stream=True)
+        supabase_url, cached_questions = result
+
+        # 2. IF CACHED, RETURN IMMEDIATELY (No Gemini call, no rate limit issues)
+        if cached_questions:
+            cursor.close()
+            conn.close()
+            print(f"Serving cached questions for {filename}")
+            return build_pdf_response(cached_questions)
+
+        # 3. IF NOT CACHED, EXTRACT PDF TEXT
+        print(f"Generating new questions for {filename}...")
+        pdf_response = req.get(supabase_url, stream=True)
         if pdf_response.status_code != 200:
+            cursor.close()
+            conn.close()
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        pdf_bytes = pdf_response.raw.read(2 * 1024 * 1024)
+        pdf_bytes = pdf_response.raw.read(5 * 1024 * 1024) # Increased to 5MB
         del pdf_response
 
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+        # Use pypdf instead of PyPDF2
+        pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
-        for page in pdf_reader.pages[1:4]:
-            text += page.extract_text()
+        # Extract from first 10 pages instead of just 3
+        for page in pdf_reader.pages[:10]: 
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted
 
         del pdf_reader
         del pdf_bytes
 
         if not text.strip():
-            return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "error": "no_text", 
+                "message": "Could not extract text. This PDF might be a scanned image."
+            }), 400
 
-        text = text[:1000]
+        text = text[:3000] # Increased context slightly for better AI results
 
+        # 4. CALL GEMINI
         prompt = f"""Read the exam paper content below and generate 10 short practice questions (one line each).
 
 Rules:
@@ -288,38 +312,30 @@ Paper content:
 
 Generate 10 questions:"""
 
-        # ═══════════════════════════════════════════════════════════════
-        # 🔑 3 GEMINI KEYS
-        # ═══════════════════════════════════════════════════════════════
         from google import genai
+        
         GEMINI_KEYS = [
-            os.getenv("GEMINI_API_KEY_1"),
-            os.getenv("GEMINI_API_KEY_2"),
-            os.getenv("GEMINI_API_KEY_3"),
+            os.getenv("GEMINI_API_KEY"),      # Primary
+            os.getenv("GEMINI_API_KEY_2"),    # Backup
+            os.getenv("GEMINI_API_KEY_3"),    # Backup
         ]
-        if not any(GEMINI_KEYS):
-            GEMINI_KEYS = [os.getenv("GEMINI_API_KEY")]
-        # DEBUG — remove after fixing
-        print("=== DEBUG ENV VARS ===")
-        print(f"KEY_1: {os.getenv('GEMINI_API_KEY_1')[:15] if os.getenv('GEMINI_API_KEY_1') else 'NOT FOUND'}")
-        print(f"KEY_2: {os.getenv('GEMINI_API_KEY_2')[:15] if os.getenv('GEMINI_API_KEY_2') else 'NOT FOUND'}")
-        print(f"KEY_3: {os.getenv('GEMINI_API_KEY_3')[:15] if os.getenv('GEMINI_API_KEY_3') else 'NOT FOUND'}")
-        print(f"OLD KEY: {os.getenv('GEMINI_API_KEY')[:15] if os.getenv('GEMINI_API_KEY') else 'NOT FOUND'}")
-        print("======================")
+        GEMINI_KEYS = [k for k in GEMINI_KEYS if k] # Remove None values
 
-        # ═══════════════════════════════════════════════════════════════
+        if not GEMINI_KEYS:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "no_keys", "message": "Server config error: No API keys found."}), 500
 
         ai_text = None
         last_error = None
 
+        # Try up to 2 rounds across all keys
         for attempt in range(2):
             for i, key in enumerate(GEMINI_KEYS):
-                if not key:
-                    continue
                 try:
                     client = genai.Client(api_key=key)
                     response = client.models.generate_content(
-                        model="gemini-3.6-flash",
+                        model="gemini-1.5-flash", # Fixed model name
                         contents=prompt
                     )
                     ai_text = response.text
@@ -327,7 +343,7 @@ Generate 10 questions:"""
                     break
                 except Exception as e:
                     last_error = str(e)
-                    print(f"Key #{i + 1} attempt {attempt + 1} failed: {last_error[:80]}")
+                    print(f"Key #{i + 1} attempt {attempt + 1} failed: {last_error[:100]}")
                     continue
 
             if ai_text:
@@ -335,57 +351,66 @@ Generate 10 questions:"""
             time.sleep(2)
 
         if ai_text is None:
+            cursor.close()
+            conn.close()
             return jsonify({
                 "error": "ai_busy",
-                "message": "AI is overloaded. Please try again in a minute."
+                "message": "AI is currently overloaded. Please try again in a minute."
             }), 503
 
-        bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
-        lines = ai_text.split('\n')
-        filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
-        ai_text = '\n'.join(filtered)
+        # 5. SAVE RESULT TO DATABASE (Caching)
+        cursor.execute(
+            "UPDATE papers SET generated_questions = %s WHERE filename = %s",
+            (ai_text, filename)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
 
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
-        pdf.ln(8)
-        pdf.set_font("Arial", size=12)
-
-        for line in ai_text.split('\n'):
-            line = line.replace('Ω', ' ohm ')
-            line = line.replace('µF', ' microfarad ')
-            line = line.replace('µ', ' micro ')
-            line = line.replace('mH', ' millihenry ')
-            line = line.replace('×', ' x ')
-            line = line.replace('≈', ' approximately ')
-            line = line.replace('\\Omega', ' ohm ')
-            line = line.replace('\\mu', ' micro ')
-            line = line.replace('\\text{', '')
-            line = line.replace('\\text', '')
-            line = line.replace('\\', '')
-            line = line.replace('{', '')
-            line = line.replace('}', '')
-            line = line.replace('$', '')
-            line = line.replace('`', '')
-
-            clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
-
-            if clean_line.strip():
-                pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(6)
-
-        pdf_output = bytes(pdf.output(dest='S'))
-        del pdf
-
-        response = make_response(pdf_output)
-        response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = 'inline; filename=questions.pdf'
-        return response
+        # 6. RETURN PDF
+        return build_pdf_response(ai_text)
 
     except Exception as e:
         print(f"AI error: {e}")
         return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
+
+
+# ─── HELPER FUNCTION TO BUILD PDF ───
+def build_pdf_response(ai_text):
+    """Takes the raw AI text and converts it into a downloadable PDF."""
+    bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
+    lines = ai_text.split('\n')
+    filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
+    ai_text = '\n'.join(filtered)
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
+    pdf.ln(8)
+    pdf.set_font("Arial", size=12)
+
+    for line in ai_text.split('\n'):
+        # Clean up special characters for PDF compatibility
+        line = line.replace('Ω', ' ohm ').replace('µF', ' microfarad ').replace('µ', ' micro ')
+        line = line.replace('mH', ' millihenry ').replace('×', ' x ').replace('≈', ' approximately ')
+        line = line.replace('\\Omega', ' ohm ').replace('\\mu', ' micro ')
+        line = line.replace('\\text{', '').replace('\\text', '').replace('\\', '')
+        line = line.replace('{', '').replace('}', '').replace('$', '').replace('`', '')
+
+        clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
+
+        if clean_line.strip():
+            pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(6)
+
+    pdf_output = bytes(pdf.output(dest='S'))
+    del pdf
+
+    response = make_response(pdf_output)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'inline; filename=questions.pdf'
+    return response
 
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
