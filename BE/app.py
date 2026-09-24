@@ -4,7 +4,6 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_limiter.errors import RateLimitExceeded
 from supabase import create_client, Client
-from google import genai
 import psycopg2
 import psycopg2.extras
 import os
@@ -43,12 +42,12 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ─── GEMINI AI ───
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# ─── ADMIN PASSWORD ───
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-ADMIN_PASSWORD_HASH = hashlib.sha256(GECVLSI.encode()).hexdigest()
+# ═══════════════════════════════════════════════════════════════════
+# 🔑 ADMIN PASSWORD — CHANGE THIS LINE TO CHANGE ADMIN PASSWORD
+# ═══════════════════════════════════════════════════════════════════
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "REDBULLF1TEAM")
+ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+# ═══════════════════════════════════════════════════════════════════
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
@@ -86,7 +85,7 @@ def init_db():
 @limiter.limit("5 per minute")
 def upload_paper():
     password = request.form.get('admin_password', '')
-    password_hash = hashlib.sha256(ignite1.encode()).hexdigest()
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
     if password_hash != ADMIN_PASSWORD_HASH:
         return jsonify({"error": "unauthorized", "message": "Unauthorized."}), 403
 
@@ -252,22 +251,22 @@ def generate_questions(filename):
         if not result:
             return jsonify({"error": "not_found"}), 404
 
-        # Stream PDF (only read first 2MB to save memory)
+        # Stream PDF download (limit 2MB to save memory)
         pdf_response = req.get(result[0], stream=True)
         if pdf_response.status_code != 200:
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
         pdf_bytes = pdf_response.raw.read(2 * 1024 * 1024)
-        del pdf_response   # Free the response object immediately
+        del pdf_response
 
-        # Extract text from only 2 content pages
+        # Extract text from first 3 content pages
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
-        for page in pdf_reader.pages[1:3]:
+        for page in pdf_reader.pages[1:4]:
             text += page.extract_text()
 
-        del pdf_reader   # Free PDF reader
-        del pdf_bytes    # Free raw bytes
+        del pdf_reader
+        del pdf_bytes
 
         if not text.strip():
             return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
@@ -291,37 +290,34 @@ Paper content:
 
 Generate 10 questions:"""
 
-        # Single attempt with Gemini
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        # Gemini call (with 2 retries)
+        from google import genai
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=prompt
-            )
-            ai_text = response.text
-        except Exception as e:
-            error_msg = str(e)
-            print(f"Gemini error: {error_msg}")
-            if "503" in error_msg or "UNAVAILABLE" in error_msg:
-                return jsonify({
-                    "error": "ai_busy",
-                    "message": "AI is overloaded. Please try again in 1-2 minutes."
-                }), 503
-            elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                return jsonify({
-                    "error": "quota_exceeded",
-                    "message": "Daily AI quota reached. Try again tomorrow."
-                }), 429
-            else:
-                return jsonify({
-                    "error": "ai_failed",
-                    "message": f"AI failed: {error_msg[:100]}"
-                }), 500
+        response = None
+        last_error = None
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt
+                )
+                break
+            except Exception as e:
+                last_error = str(e)
+                print(f"Gemini attempt {attempt + 1} failed: {last_error}")
+                if "503" in last_error or "429" in last_error or "UNAVAILABLE" in last_error:
+                    time.sleep(2)
+                else:
+                    break
 
-        # Free prompt and text
-        del prompt
-        del text
+        if response is None:
+            return jsonify({
+                "error": "ai_busy",
+                "message": "AI is busy. Please try again in a minute."
+            }), 503
+
+        ai_text = response.text
 
         # Filter out diagram-dependent questions
         bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
@@ -361,7 +357,7 @@ Generate 10 questions:"""
                 pdf.ln(6)
 
         pdf_output = bytes(pdf.output(dest='S'))
-        del pdf   # Free FPDF object
+        del pdf
 
         response = make_response(pdf_output)
         response.headers['Content-Type'] = 'application/pdf'
@@ -371,6 +367,7 @@ Generate 10 questions:"""
     except Exception as e:
         print(f"AI error: {e}")
         return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
+
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
     init_db()
