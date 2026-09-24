@@ -1,62 +1,280 @@
-from http.server import BaseHTTPRequestHandler
-from google import genai
-from fpdf import FPDF
-import PyPDF2
-import io
+from flask import Flask, request, jsonify, send_from_directory, Response, make_response
+from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_limiter.errors import RateLimitExceeded
+from supabase import create_client, Client
+import psycopg2
+import psycopg2.extras
 import os
 import re
+import hashlib
+import io
 import time
 import requests as req
-import urllib.parse
+import PyPDF2
+from fpdf import FPDF
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════════
-# 🔑 3 GEMINI API KEYS
+# 🔧 FLASK APP SETUP (MUST BE HERE)
 # ═══════════════════════════════════════════════════════════════════
-GEMINI_KEYS = [
-    os.environ.get("GEMINI_API_KEY_1"),
-    os.environ.get("GEMINI_API_KEY_2"),
-    os.environ.get("GEMINI_API_KEY_3"),
-]
+app = Flask(__name__)
+CORS(app)
 # ═══════════════════════════════════════════════════════════════════
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        try:
-            # 1. Get filename from URL
-            filename = urllib.parse.unquote(self.path.split('/')[-1])
+# ─── RATE LIMITING ───
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
-            # 2. Get paper URL from Supabase
-            supabase_url = os.environ.get("SUPABASE_URL")
-            supabase_key = os.environ.get("SUPABASE_KEY")
+@app.errorhandler(RateLimitExceeded)
+def handle_rate_limit_exceeded(e):
+    return jsonify({
+        "error": "rate_limit_exceeded",
+        "message": "Too many attempts. Please wait a minute and try again."
+    }), 429
 
-            resp = req.get(
-                f"{supabase_url}/rest/v1/papers?filename=eq.{filename}&select=supabase_url",
-                headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
-            )
-            data = resp.json()
+# ─── SUPABASE ───
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-            if not data:
-                self.send_response(404)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(b'{"error": "not_found"}')
-                return
+# ═══════════════════════════════════════════════════════════════════
+# 🔑 ADMIN PASSWORD — CHANGE THIS LINE
+# ═══════════════════════════════════════════════════════════════════
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "REDBULLF1TEAM")
+ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+# ═══════════════════════════════════════════════════════════════════
 
-            pdf_url = data[0]["supabase_url"]
+# ─── SERVE FRONTEND ───
+@app.route('/')
+def home():
+    return send_from_directory('../FE', 'index.html')
 
-            # 3. Download PDF (stream, limited to 2MB)
-            pdf_response = req.get(pdf_url, stream=True)
-            pdf_bytes = pdf_response.raw.read(2 * 1024 * 1024)
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('../FE', filename)
 
-            text = ""
-            for page in pdf_reader.pages[1:3]:
-                text += page.extract_text()
-            text = text[:1000]
+# ─── DATABASE SETUP ───
+def init_db():
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS papers (
+            id SERIAL PRIMARY KEY,
+            filename TEXT UNIQUE NOT NULL,
+            subject TEXT,
+            semester INTEGER,
+            department TEXT,
+            year INTEGER,
+            exam_type TEXT,
+            uploaded_by TEXT,
+            supabase_url TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-            # 4. Build prompt
-            prompt = f"""Read the exam paper content below and generate 10 short practice questions (one line each).
+# ─── UPLOAD PAPER (ADMIN ONLY) ───
+@app.route('/upload', methods=['POST'])
+@limiter.limit("5 per minute")
+def upload_paper():
+    password = request.form.get('admin_password', '')
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    if password_hash != ADMIN_PASSWORD_HASH:
+        return jsonify({"error": "unauthorized", "message": "Unauthorized."}), 403
+
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    subject = request.form.get('subject', '').strip()
+    semester = request.form.get('semester', '').strip()
+    department = request.form.get('department', '').strip()
+    year = request.form.get('year', '').strip()
+    exam_type = request.form.get('exam_type', '').strip()
+    uploaded_by = request.form.get('uploaded_by', '').strip()
+
+    if not all([subject, semester, department, year, exam_type, uploaded_by]):
+        return jsonify({"error": "missing_fields", "message": "Please fill all fields."}), 400
+
+    clean_subject = re.sub(r'[^A-Za-z0-9]', '', subject)
+    generated_filename = f"{clean_subject}_{semester}_{department}_{exam_type}.pdf"
+
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM papers WHERE LOWER(filename) = LOWER(%s)", (generated_filename,))
+    if cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "duplicate", "message": f"'{generated_filename}' already exists!"}), 409
+
+    file_data = file.read()
+    try:
+        supabase.storage.from_('papers').upload(
+            path=generated_filename,
+            file=file_data,
+            file_options={"content-type": "application/pdf"}
+        )
+    except Exception as e:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "storage_error", "message": str(e)}), 500
+
+    public_url = supabase.storage.from_('papers').get_public_url(generated_filename)
+
+    cursor.execute('''
+        INSERT INTO papers (filename, subject, semester, department, year, exam_type, uploaded_by, supabase_url)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (generated_filename, subject, semester, department, year, exam_type, uploaded_by, public_url))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"message": f"Uploaded as '{generated_filename}'!"})
+
+# ─── GET ALL PAPERS ───
+@app.route('/papers', methods=['GET'])
+def get_papers():
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute("SELECT * FROM papers ORDER BY timestamp DESC")
+    papers = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(papers)
+
+# ─── SEARCH PAPERS ───
+@app.route('/search', methods=['GET'])
+def search_papers():
+    query = request.args.get('q', '').strip()
+    dept = request.args.get('dept', '').strip()
+    sem = request.args.get('sem', '').strip()
+    year = request.args.get('year', '').strip()
+
+    sql = "SELECT * FROM papers WHERE 1=1"
+    params = []
+
+    if query:
+        sql += " AND (LOWER(subject) LIKE %s OR LOWER(filename) LIKE %s)"
+        params.extend([f"%{query.lower()}%", f"%{query.lower()}%"])
+    if dept:
+        sql += " AND department = %s"
+        params.append(dept)
+    if sem:
+        sql += " AND semester = %s"
+        params.append(sem)
+    if year:
+        sql += " AND year = %s"
+        params.append(year)
+
+    sql += " ORDER BY timestamp DESC"
+
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cursor.execute(sql, params)
+    papers = [dict(row) for row in cursor.fetchall()]
+    cursor.close()
+    conn.close()
+    return jsonify(papers)
+
+# ─── DOWNLOAD PAPER ───
+@app.route('/download/<filename>', methods=['GET'])
+def download_paper(filename):
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not result:
+        return jsonify({"error": "not_found"}), 404
+
+    pdf_response = req.get(result[0])
+    if pdf_response.status_code != 200:
+        return jsonify({"error": "fetch_failed"}), 500
+
+    return Response(
+        pdf_response.content,
+        mimetype='application/pdf',
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+# ─── DELETE PAPER (ADMIN ONLY) ───
+@app.route('/delete/<filename>', methods=['DELETE'])
+@limiter.limit("5 per minute")
+def delete_paper(filename):
+    password = request.headers.get('X-Admin-Password', '')
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    if password_hash != ADMIN_PASSWORD_HASH:
+        return jsonify({"error": "unauthorized"}), 403
+
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM papers WHERE filename = %s", (filename,))
+    if not cursor.fetchone():
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "not_found"}), 404
+
+    try:
+        supabase.storage.from_('papers').remove([filename])
+    except Exception as e:
+        print(f"Storage delete failed: {e}")
+
+    cursor.execute("DELETE FROM papers WHERE filename = %s", (filename,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return jsonify({"message": f"'{filename}' deleted successfully!"})
+
+# ─── AI QUESTION GENERATOR (GEMINI) ───
+@app.route('/generate-questions/<filename>', methods=['POST'])
+@limiter.limit("3 per minute")
+def generate_questions(filename):
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("SELECT supabase_url FROM papers WHERE filename = %s", (filename,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not result:
+            return jsonify({"error": "not_found"}), 404
+
+        pdf_response = req.get(result[0], stream=True)
+        if pdf_response.status_code != 200:
+            return jsonify({"error": "pdf_fetch_failed"}), 500
+
+        pdf_bytes = pdf_response.raw.read(2 * 1024 * 1024)
+        del pdf_response
+
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+        text = ""
+        for page in pdf_reader.pages[1:4]:
+            text += page.extract_text()
+
+        del pdf_reader
+        del pdf_bytes
+
+        if not text.strip():
+            return jsonify({"error": "no_text", "message": "Could not extract text from PDF."}), 400
+
+        text = text[:1000]
+
+        prompt = f"""Read the exam paper content below and generate 10 short practice questions (one line each).
 
 Rules:
 - Output ONLY 10 numbered questions (1 to 10).
@@ -70,95 +288,101 @@ Paper content:
 
 Generate 10 questions:"""
 
-            # ═══════════════════════════════════════════════════════════
-            # 🔑 TRY ALL 3 KEYS (2 ROUNDS)
-            # ═══════════════════════════════════════════════════════════
-            ai_text = None
-            last_error = None
+        # ═══════════════════════════════════════════════════════════════
+        # 🔑 3 GEMINI KEYS
+        # ═══════════════════════════════════════════════════════════════
+        from google import genai
+        GEMINI_KEYS = [
+            os.getenv("GEMINI_API_KEY_1"),
+            os.getenv("GEMINI_API_KEY_2"),
+            os.getenv("GEMINI_API_KEY_3"),
+        ]
+        if not any(GEMINI_KEYS):
+            GEMINI_KEYS = [os.getenv("GEMINI_API_KEY")]
+        # ═══════════════════════════════════════════════════════════════
 
-            for attempt in range(2):
-                for i, key in enumerate(GEMINI_KEYS):
-                    if not key:
-                        continue
-                    try:
-                        client = genai.Client(api_key=key)
-                        response = client.models.generate_content(
-                            model="gemini-3.6-flash",
-                            contents=prompt
-                        )
-                        ai_text = response.text
-                        print(f"Success with key #{i + 1}")
-                        break
-                    except Exception as e:
-                        last_error = str(e)
-                        print(f"Key #{i + 1} attempt {attempt + 1} failed: {last_error[:80]}")
-                        continue
+        ai_text = None
+        last_error = None
 
-                if ai_text:
+        for attempt in range(2):
+            for i, key in enumerate(GEMINI_KEYS):
+                if not key:
+                    continue
+                try:
+                    client = genai.Client(api_key=key)
+                    response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=prompt
+                    )
+                    ai_text = response.text
+                    print(f"Success with key #{i + 1}")
                     break
-                time.sleep(2)
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"Key #{i + 1} attempt {attempt + 1} failed: {last_error[:80]}")
+                    continue
 
-            if ai_text is None:
-                self.send_response(503)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(b'{"error": "ai_busy", "message": "AI is overloaded. Try again in a minute."}')
-                return
-            # ═══════════════════════════════════════════════════════════
+            if ai_text:
+                break
+            time.sleep(2)
 
-            # 5. Build the PDF
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
-            pdf.ln(8)
-            pdf.set_font("Arial", size=12)
+        if ai_text is None:
+            return jsonify({
+                "error": "ai_busy",
+                "message": "AI is overloaded. Please try again in a minute."
+            }), 503
 
-            for line in ai_text.split('\n'):
-                line = line.replace('Ω', ' ohm ')
-                line = line.replace('µF', ' microfarad ')
-                line = line.replace('µ', ' micro ')
-                line = line.replace('mH', ' millihenry ')
-                line = line.replace('×', ' x ')
-                line = line.replace('\\Omega', ' ohm ')
-                line = line.replace('\\mu', ' micro ')
-                line = line.replace('\\text{', '')
-                line = line.replace('\\text', '')
-                line = line.replace('\\', '')
-                line = line.replace('{', '')
-                line = line.replace('}', '')
-                line = line.replace('$', '')
-                line = line.replace('`', '')
+        bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
+        lines = ai_text.split('\n')
+        filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
+        ai_text = '\n'.join(filtered)
 
-                clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(0, 10, txt="QStack Practice Questions", ln=True, align='C')
+        pdf.ln(8)
+        pdf.set_font("Arial", size=12)
 
-                if clean_line.strip():
-                    pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
-                    pdf.ln(6)
+        for line in ai_text.split('\n'):
+            line = line.replace('Ω', ' ohm ')
+            line = line.replace('µF', ' microfarad ')
+            line = line.replace('µ', ' micro ')
+            line = line.replace('mH', ' millihenry ')
+            line = line.replace('×', ' x ')
+            line = line.replace('≈', ' approximately ')
+            line = line.replace('\\Omega', ' ohm ')
+            line = line.replace('\\mu', ' micro ')
+            line = line.replace('\\text{', '')
+            line = line.replace('\\text', '')
+            line = line.replace('\\', '')
+            line = line.replace('{', '')
+            line = line.replace('}', '')
+            line = line.replace('$', '')
+            line = line.replace('`', '')
 
-            pdf_output = bytes(pdf.output(dest='S'))
+            clean_line = re.sub(r'[^\x00-\x7F]+', '', line)
 
-            # 6. Return the PDF
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/pdf')
-            self.send_header('Content-Disposition', 'inline; filename=questions.pdf')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(pdf_output)
+            if clean_line.strip():
+                pdf.multi_cell(0, 8, txt=clean_line, new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(6)
 
-        except Exception as e:
-            error_msg = str(e)[:150]
-            print(f"AI error: {error_msg}")
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(f'{{"error": "ai_failed", "message": "{error_msg}"}}'.encode())
+        pdf_output = bytes(pdf.output(dest='S'))
+        del pdf
 
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+        response = make_response(pdf_output)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = 'inline; filename=questions.pdf'
+        return response
+
+    except Exception as e:
+        print(f"AI error: {e}")
+        return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
+
+# ─── INITIALIZE DATABASE ───
+with app.app_context():
+    init_db()
+
+if __name__ == '__main__':
+    print("\n📚 QStack Server running on http://localhost:5000\n")
+    app.run(port=5000, debug=True)
