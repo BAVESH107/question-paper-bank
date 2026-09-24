@@ -143,7 +143,7 @@ async function generateQuestions(filename) {
     newTab.document.write('<p style="text-align:center; font-family: sans-serif; margin-top: 50px; color:#6B7280;">Generating practice questions...</p>');
 
     try {
-        const response = await fetch(`/api/generate/${encodeURIComponent(filename)}`, {
+        const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
             method: 'POST'
         });
 
