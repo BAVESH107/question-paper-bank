@@ -30,7 +30,7 @@ CORS(app)
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["1000 per day", "200 per hour"],
     storage_uri="memory://"
 )
 
@@ -243,10 +243,10 @@ def delete_paper(filename):
 
 # ─── AI QUESTION GENERATOR (GEMINI VISION + CACHING) ───
 @app.route('/generate-questions/<filename>', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def generate_questions(filename):
     try:
-        # 1. CONNECT TO DB & CHECK CACHE
+        # 1. CONNECT TO DB & CHECK CACHEe
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT supabase_url, generated_questions FROM papers WHERE filename = %s", (filename,))
