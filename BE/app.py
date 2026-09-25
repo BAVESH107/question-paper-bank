@@ -1,3 +1,4 @@
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, send_from_directory, Response, make_response
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -23,6 +24,7 @@ load_dotenv()
 # 🔧 FLASK APP SETUP (MUST BE FIRST BEFORE ANY @app.route)
 # ═══════════════════════════════════════════════════════════════════
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app,x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app)
 # ═══════════════════════════════════════════════════════════════════
 
