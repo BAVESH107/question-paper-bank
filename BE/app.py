@@ -304,7 +304,7 @@ def generate_questions(filename):
 
         ai_text = None
         last_error = None
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+        models_to_try = ["gemini-3.6-flash", "gemini-3.6-pro", "gemini-2.5-flash"]
 
         # ─── CASE A: DIGITAL PDF ───
         if len(text.strip()) > 50:
