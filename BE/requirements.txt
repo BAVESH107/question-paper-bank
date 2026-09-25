@@ -9,3 +9,4 @@ requests
 google-genai
 pypdf
 fpdf2
+pdf2image
