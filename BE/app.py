@@ -453,6 +453,52 @@ def build_pdf_response(ai_text):
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
     init_db()
+# ─── GET ANALYTICS (Admin only) ───
+@app.route('/api/analytics', methods=['GET'])
+def get_analytics():
+    password = request.headers.get('X-Admin-Password', '')
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    if password_hash != ADMIN_PASSWORD_HASH:
+        return jsonify({"error": "unauthorized"}), 403
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM page_views")
+        total_views = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at::date = CURRENT_DATE")
+        views_today = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at >= NOW() - INTERVAL '7 days'")
+        views_week = cursor.fetchone()[0]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_views": total_views,
+            "views_today": views_today,
+            "views_this_week": views_week
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ─── TRACK PAGE VIEW ───
+@app.route('/api/track-view', methods=['POST'])
+def track_view():
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO page_views (source) VALUES (%s)", ('web',))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "tracked"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("\nQStack Server running on http://localhost:5000\n")

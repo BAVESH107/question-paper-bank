@@ -1,4 +1,5 @@
 const API_URL = "https://question-paper-bank.onrender.com";
+fetch(`${API_URL}/api/track-view`,{method: 'POST'}).catch(()=>{});
 
 document.addEventListener('DOMContentLoaded', () => {
     loadAllPapers();
@@ -53,10 +54,14 @@ function isAdminMode() {
     return urlParams.get('admin') === ADMIN_KEY;
 }
 
-// ─── DISPLAY PAPERS ───
 function displayPapers(papers) {
     const list = document.getElementById('papersList');
     const adminMode = isAdminMode();
+
+    // If admin, inject the stats banner at the top
+    if (adminMode) {
+        injectAdminStats();
+    }
 
     if (!papers || papers.length === 0) {
         list.innerHTML = `
@@ -93,6 +98,46 @@ function displayPapers(papers) {
     list.innerHTML = html;
 }
 
+
+// ─── INJECT ADMIN STATS BANNER ───
+async function injectAdminStats() {
+    // Don't re-inject if it already exists
+    if (document.getElementById('adminStatsBanner')) return;
+
+    const list = document.getElementById('papersList');
+    const banner = document.createElement('div');
+    banner.id = 'adminStatsBanner';
+    banner.innerHTML = `<p style="color:#6B7280; font-size:13px; text-align:center;">Loading stats...</p>`;
+    banner.style.cssText = 'background:#FFFFFF; border:1px solid #E5E7EB; border-radius:10px; padding:16px; margin-bottom:16px; display:flex; justify-content:space-around; text-align:center;';
+    list.parentNode.insertBefore(banner, list);
+
+    try {
+        const password = localStorage.getItem('qs_admin_pass') || prompt("Enter admin password for stats:");
+        if (!password) {
+            banner.remove();
+            return;
+        }
+        localStorage.setItem('qs_admin_pass', password);
+
+        const response = await fetch(`${API_URL}/api/analytics`, {
+            headers: { 'X-Admin-Password': password }
+        });
+
+        if (!response.ok) {
+            banner.innerHTML = `<p style="color:#DC2626; font-size:13px;">Could not load stats.</p>`;
+            return;
+        }
+
+        const data = await response.json();
+        banner.innerHTML = `
+            <div><p style="font-size:24px; font-weight:800; color:#2563EB; margin:0;">${data.total_views}</p><p style="font-size:11px; color:#6B7280; font-weight:600; margin:4px 0 0;">TOTAL VIEWS</p></div>
+            <div><p style="font-size:24px; font-weight:800; color:#2563EB; margin:0;">${data.views_today}</p><p style="font-size:11px; color:#6B7280; font-weight:600; margin:4px 0 0;">TODAY</p></div>
+            <div><p style="font-size:24px; font-weight:800; color:#2563EB; margin:0;">${data.views_this_week}</p><p style="font-size:11px; color:#6B7280; font-weight:600; margin:4px 0 0;">THIS WEEK</p></div>
+        `;
+    } catch (e) {
+        banner.innerHTML = `<p style="color:#DC2626; font-size:13px;">Server error.</p>`;
+    }
+}
 // ─── DELETE PAPER ───
 async function deletePaper(filename) {
     const password = prompt("Enter admin password to delete:");
