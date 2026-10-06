@@ -1,4 +1,3 @@
-from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, request, jsonify, send_from_directory, Response, make_response
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -14,24 +13,26 @@ import io
 import time
 import random
 import requests as req
-import pypdf  # Updated from PyPDF2
+import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════════
-# 🔧 FLASK APP SETUP (MUST BE FIRST BEFORE ANY @app.route)
+# 🔧 FLASK APP SETUP
 # ═══════════════════════════════════════════════════════════════════
 app = Flask(__name__)
-app.wsgi_app = ProxyFix(app.wsgi_app,x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app)
 # ═══════════════════════════════════════════════════════════════════
 
-# ─── RATE LIMITING ───
+# ─── ADMIN PASSWORD ───
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "REDBULLF1TEAM")
+ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+
+# ─── RATE LIMITER (Admin-aware key) ───
 def get_rate_limit_key():
-    """Use a custom key so admins get separate limits."""
-    # If the request includes the admin password header, use a special key
+    """Give admins their own separate rate limit bucket."""
     admin_pass = request.headers.get('X-Admin-Password', '')
     if admin_pass:
         password_hash = hashlib.sha256(admin_pass.encode()).hexdigest()
@@ -59,12 +60,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ═══════════════════════════════════════════════════════════════════
-# 🔑 ADMIN PASSWORD
-# ═══════════════════════════════════════════════════════════════════
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "REDBULLF1TEAM")
-ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-# ═══════════════════════════════════════════════════════════════════
 
 # ─── SERVE FRONTEND ───
 @app.route('/')
@@ -74,6 +69,7 @@ def home():
 @app.route('/<path:filename>')
 def serve_static(filename):
     return send_from_directory('../FE', filename)
+
 
 # ─── DATABASE SETUP ───
 def init_db():
@@ -94,13 +90,75 @@ def init_db():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS page_views (
+            id SERIAL PRIMARY KEY,
+            viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            source TEXT DEFAULT 'web'
+        )
+    ''')
     conn.commit()
     cursor.close()
     conn.close()
 
-# ─── UPLOAD PAPER (ADMIN ONLY) ───
+
+# ═══════════════════════════════════════════════════════════════════
+# 📊 ANALYTICS ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════
+
+@app.route('/api/track-view', methods=['POST'])
+def track_view():
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO page_views (source) VALUES (%s)", ('web',))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"status": "tracked"}), 200
+    except Exception as e:
+        print(f"Track view error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/analytics', methods=['GET'])
+def get_analytics():
+    password = request.headers.get('X-Admin-Password', '')
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    if password_hash != ADMIN_PASSWORD_HASH:
+        return jsonify({"error": "unauthorized"}), 403
+
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM page_views")
+        total_views = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at::date = CURRENT_DATE")
+        views_today = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at >= NOW() - INTERVAL '7 days'")
+        views_week = cursor.fetchone()[0]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_views": total_views,
+            "views_today": views_today,
+            "views_this_week": views_week
+        })
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 📄 PAPER MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════
+
 @app.route('/upload', methods=['POST'])
-@limiter.limit("30 per minute",key_func=lambda: "admin" if request.headers.get('X-Admin-Password')else get_remote_address())
 def upload_paper():
     password = request.form.get('admin_password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -156,7 +214,7 @@ def upload_paper():
 
     return jsonify({"message": f"Uploaded as '{generated_filename}'!"})
 
-# ─── GET ALL PAPERS ───
+
 @app.route('/papers', methods=['GET'])
 def get_papers():
     conn = psycopg2.connect(DATABASE_URL)
@@ -167,7 +225,7 @@ def get_papers():
     conn.close()
     return jsonify(papers)
 
-# ─── SEARCH PAPERS ───
+
 @app.route('/search', methods=['GET'])
 def search_papers():
     query = request.args.get('q', '').strip()
@@ -201,7 +259,7 @@ def search_papers():
     conn.close()
     return jsonify(papers)
 
-# ─── DOWNLOAD PAPER ───
+
 @app.route('/download/<filename>', methods=['GET'])
 def download_paper(filename):
     conn = psycopg2.connect(DATABASE_URL)
@@ -224,9 +282,8 @@ def download_paper(filename):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
-# ─── DELETE PAPER (ADMIN ONLY) ───
+
 @app.route('/delete/<filename>', methods=['DELETE'])
-@limiter.limit("5 per minute")
 def delete_paper(filename):
     password = request.headers.get('X-Admin-Password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -253,12 +310,15 @@ def delete_paper(filename):
 
     return jsonify({"message": f"'{filename}' deleted successfully!"})
 
-# ─── AI QUESTION GENERATOR (GEMINI VISION + CACHING) ───
+
+# ═══════════════════════════════════════════════════════════════════
+# 🤖 AI QUESTION GENERATOR (GEMINI VISION + CACHING)
+# ═══════════════════════════════════════════════════════════════════
+
 @app.route('/generate-questions/<filename>', methods=['POST'])
-@limiter.limit("10 per minute")
 def generate_questions(filename):
     try:
-        # 1. CONNECT TO DB & CHECK CACHEe
+        # 1. CHECK CACHE
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
         cursor.execute("SELECT supabase_url, generated_questions FROM papers WHERE filename = %s", (filename,))
@@ -271,14 +331,13 @@ def generate_questions(filename):
 
         supabase_url, cached_questions = result
 
-        # 2. IF CACHED, RETURN IMMEDIATELY
         if cached_questions:
             cursor.close()
             conn.close()
             print(f"Serving cached questions for {filename}")
             return build_pdf_response(cached_questions)
 
-        # 3. DOWNLOAD PDF FROM SUPABASE
+        # 2. DOWNLOAD PDF
         print(f"Generating new questions for {filename}...")
         pdf_response = req.get(supabase_url, stream=True)
         if pdf_response.status_code != 200:
@@ -286,10 +345,10 @@ def generate_questions(filename):
             conn.close()
             return jsonify({"error": "pdf_fetch_failed"}), 500
 
-        pdf_bytes = pdf_response.raw.read(10 * 1024 * 1024)  # 10MB limit
+        pdf_bytes = pdf_response.raw.read(10 * 1024 * 1024)
         del pdf_response
 
-        # 4. TRY TEXT EXTRACTION
+        # 3. TEXT EXTRACTION
         pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
         for page in pdf_reader.pages[:5]:
@@ -297,9 +356,9 @@ def generate_questions(filename):
             if extracted:
                 text += extracted
 
-        # 5. PREPARE GEMINI CLIENT & KEYS
+        # 4. GEMINI SETUP
         from google import genai
-        
+
         GEMINI_KEYS = [
             os.getenv("GEMINI_API_KEY"),
             os.getenv("GEMINI_API_KEY_2"),
@@ -314,9 +373,9 @@ def generate_questions(filename):
 
         ai_text = None
         last_error = None
-        models_to_try = ["gemini-3.6-flash", "gemini-3.6-pro", "gemini-2.5-flash"]
+        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
 
-        # ─── CASE A: DIGITAL PDF ───
+        # CASE A: DIGITAL PDF
         if len(text.strip()) > 50:
             print("Digital PDF detected. Using text extraction.")
             text = text[:3000]
@@ -354,18 +413,18 @@ Generate 10 questions:"""
                 if not ai_text:
                     time.sleep(random.uniform(2, 5))
 
-        # ─── CASE B: SCANNED PDF (GEMINI VISION) ───
+        # CASE B: SCANNED PDF (GEMINI VISION)
         else:
             print("Scanned PDF detected. Converting to images for Gemini Vision.")
             try:
                 from pdf2image import convert_from_bytes
                 images = convert_from_bytes(pdf_bytes, first_page=1, last_page=3, dpi=150)
-                
+
                 prompt_parts = [
                     "Read the exam paper images below and generate 10 short practice questions (one line each).",
                     "Rules: Output ONLY 10 numbered questions (1 to 10). Write in PLAIN ENGLISH. Use 'ohm' not Ω. Do NOT use LaTeX or special symbols. Do NOT refer to diagrams or figures. Each question must be self-contained."
                 ]
-                
+
                 for img in images:
                     img_byte_arr = io.BytesIO()
                     img.save(img_byte_arr, format='JPEG')
@@ -396,16 +455,16 @@ Generate 10 questions:"""
                 conn.close()
                 return jsonify({"error": "ocr_failed", "message": f"Could not read PDF: {str(e)[:100]}"}), 500
 
-        # 6. HANDLE FAILURE
+        # 5. HANDLE FAILURE
         if ai_text is None:
             cursor.close()
             conn.close()
             return jsonify({
                 "error": "ai_busy",
                 "message": "Google's AI is currently overloaded. Please try again in 2 minutes."
-            }), 429
+            }), 503
 
-        # 7. SAVE TO DATABASE (CACHE)
+        # 6. CACHE RESULT
         cursor.execute(
             "UPDATE papers SET generated_questions = %s WHERE filename = %s",
             (ai_text, filename)
@@ -415,7 +474,6 @@ Generate 10 questions:"""
         conn.close()
         print(f"Cached questions for {filename}")
 
-        # 8. RETURN PDF
         return build_pdf_response(ai_text)
 
     except Exception as e:
@@ -425,7 +483,6 @@ Generate 10 questions:"""
 
 # ─── HELPER: BUILD PDF FROM AI TEXT ───
 def build_pdf_response(ai_text):
-    """Converts raw AI text into a clean, downloadable PDF."""
     bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
     lines = ai_text.split('\n')
     filtered = [l for l in lines if not any(p in l.lower() for p in bad_phrases)]
@@ -463,52 +520,6 @@ def build_pdf_response(ai_text):
 # ─── INITIALIZE DATABASE ───
 with app.app_context():
     init_db()
-# ─── GET ANALYTICS (Admin only) ───
-@app.route('/api/analytics', methods=['GET'])
-def get_analytics():
-    password = request.headers.get('X-Admin-Password', '')
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    if password_hash != ADMIN_PASSWORD_HASH:
-        return jsonify({"error": "unauthorized"}), 403
-
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT COUNT(*) FROM page_views")
-        total_views = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at::date = CURRENT_DATE")
-        views_today = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at >= NOW() - INTERVAL '7 days'")
-        views_week = cursor.fetchone()[0]
-
-        cursor.close()
-        conn.close()
-
-        return jsonify({
-            "total_views": total_views,
-            "views_today": views_today,
-            "views_this_week": views_week
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ─── TRACK PAGE VIEW ───
-@app.route('/api/track-view', methods=['POST'])
-def track_view():
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO page_views (source) VALUES (%s)", ('web',))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return jsonify({"status": "tracked"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("\nQStack Server running on http://localhost:5000\n")
