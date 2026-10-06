@@ -29,10 +29,20 @@ CORS(app)
 # ═══════════════════════════════════════════════════════════════════
 
 # ─── RATE LIMITING ───
+def get_rate_limit_key():
+    """Use a custom key so admins get separate limits."""
+    # If the request includes the admin password header, use a special key
+    admin_pass = request.headers.get('X-Admin-Password', '')
+    if admin_pass:
+        password_hash = hashlib.sha256(admin_pass.encode()).hexdigest()
+        if password_hash == ADMIN_PASSWORD_HASH:
+            return "admin"
+    return get_remote_address()
+
 limiter = Limiter(
-    get_remote_address,
+    get_rate_limit_key,
     app=app,
-    default_limits=["1000 per day", "200 per hour"],
+    default_limits=["200 per day", "50 per hour"],
     storage_uri="memory://"
 )
 
@@ -90,7 +100,7 @@ def init_db():
 
 # ─── UPLOAD PAPER (ADMIN ONLY) ───
 @app.route('/upload', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("30 per minute",key_func=lambda: "admin" if request.headers.get('X-Admin-Password')else get_remote_address())
 def upload_paper():
     password = request.form.get('admin_password', '')
     password_hash = hashlib.sha256(password.encode()).hexdigest()

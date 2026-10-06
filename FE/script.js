@@ -1,9 +1,13 @@
 const API_URL = "https://question-paper-bank.onrender.com";
-fetch(`${API_URL}/api/track-view`,{method: 'POST'}).catch(()=>{});
+
+// ─── TRACK PAGE VIEW (Silent) ───
+fetch(`${API_URL}/api/track-view`, { method: 'POST' }).catch(() => {});
+
 
 document.addEventListener('DOMContentLoaded', () => {
     loadAllPapers();
 });
+
 
 // ─── FETCH ALL PAPERS ───
 async function loadAllPapers() {
@@ -19,6 +23,7 @@ async function loadAllPapers() {
         console.error(error);
     }
 }
+
 
 // ─── SEARCH PAPERS ───
 async function searchPapers() {
@@ -46,6 +51,7 @@ async function searchPapers() {
     }
 }
 
+
 // ─── CHECK IF ADMIN MODE ───
 const ADMIN_KEY = "IHAVEAPLANA.";
 
@@ -54,6 +60,8 @@ function isAdminMode() {
     return urlParams.get('admin') === ADMIN_KEY;
 }
 
+
+// ─── DISPLAY PAPERS ───
 function displayPapers(papers) {
     const list = document.getElementById('papersList');
     const adminMode = isAdminMode();
@@ -99,7 +107,7 @@ function displayPapers(papers) {
 }
 
 
-// ─── INJECT ADMIN STATS BANNER ───
+// ─── ADMIN STATS BANNER ───
 async function injectAdminStats() {
     // Don't re-inject if it already exists
     if (document.getElementById('adminStatsBanner')) return;
@@ -138,6 +146,8 @@ async function injectAdminStats() {
         banner.innerHTML = `<p style="color:#DC2626; font-size:13px;">Server error.</p>`;
     }
 }
+
+
 // ─── DELETE PAPER ───
 async function deletePaper(filename) {
     const password = prompt("Enter admin password to delete:");
@@ -168,10 +178,12 @@ async function deletePaper(filename) {
     }
 }
 
+
 // ─── DOWNLOAD PAPER ───
 function downloadPaper(filename) {
     window.location.href = `${API_URL}/download/${encodeURIComponent(filename)}`;
 }
+
 
 // ─── PREVIEW PAPER ───
 function previewPaper(url) {
@@ -182,42 +194,48 @@ function previewPaper(url) {
     window.open(url, '_blank');
 }
 
-// ─── AI QUESTION GENERATOR (UPDATED) ───
+
+// ─── AI QUESTION GENERATOR (WITH ADMIN BYPASS) ───
 async function generateQuestions(filename) {
-    // Open a new tab immediately to show loading state
     const newTab = window.open('', '_blank');
     newTab.document.write(`
         <div style="text-align:center; font-family: sans-serif; margin-top: 50px; color:#6B7280;">
             <h2>Generating practice questions...</h2>
-            <p>This may take up to 15 seconds. Please do not close this tab.</p>
+            <p>This may take up to 20 seconds. Please do not close this tab.</p>
         </div>
     `);
 
     try {
-        // FIXED: Using API_URL constant and the correct endpoint
+        // Include admin password header if available (bypasses rate limit)
+        const headers = {};
+        const adminPass = localStorage.getItem('qs_admin_pass');
+        if (adminPass) {
+            headers['X-Admin-Password'] = adminPass;
+        }
+
         const response = await fetch(`${API_URL}/generate-questions/${encodeURIComponent(filename)}`, {
-            method: 'POST'
+            method: 'POST',
+            headers: headers
         });
 
         const contentType = response.headers.get("content-type");
 
-        // Handle Rate Limiting (Too many requests)
+        // Handle Rate Limiting
         if (response.status === 429) {
             newTab.document.body.innerHTML = `
                 <div style="text-align:center; font-family: sans-serif; margin-top: 50px; padding: 20px;">
                     <p style="color: #DC2626; font-size: 18px; font-weight: bold;">Too many requests!</p>
-                    <p style="color: #6B7280; font-size: 14px; margin-top: 10px;">You have reached the limit. Please wait 60 seconds before trying again.</p>
+                    <p style="color: #6B7280; font-size: 14px; margin-top: 10px;">Please wait 60 seconds before trying again.</p>
                 </div>`;
             return;
         }
 
-        // If successful and it's a PDF
+        // Handle successful PDF response
         if (response.ok && contentType && contentType.includes("application/pdf")) {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             newTab.location.href = url;
         } else {
-            // Handle other errors (like scanned PDFs or server crashes)
             let errorMsg = "AI generation failed.";
             try {
                 const data = await response.json();
@@ -242,6 +260,7 @@ async function generateQuestions(filename) {
         console.error(error);
     }
 }
+
 
 // ─── CLOSE AI MODAL ───
 function closeAIModal() {
