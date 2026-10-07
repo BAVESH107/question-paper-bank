@@ -43,7 +43,7 @@ def get_rate_limit_key():
 limiter = Limiter(
     get_rate_limit_key,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["1000 per day", "300 per hour"],
     storage_uri="memory://"
 )
 
