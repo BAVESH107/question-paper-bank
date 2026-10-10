@@ -12,12 +12,12 @@ import hashlib
 import io
 import time
 import random
+import base64
 import requests as req
 import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
-import base64
-openai
+from openai import OpenAI
 
 load_dotenv()
 
@@ -26,15 +26,13 @@ load_dotenv()
 # ═══════════════════════════════════════════════════════════════════
 app = Flask(__name__)
 CORS(app)
-# ═══════════════════════════════════════════════════════════════════
 
 # ─── ADMIN PASSWORD ───
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "REDBULLF1TEAM")
 ADMIN_PASSWORD_HASH = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
 
-# ─── RATE LIMITER (Admin-aware key) ───
+# ─── RATE LIMITER ───
 def get_rate_limit_key():
-    """Give admins their own separate rate limit bucket."""
     admin_pass = request.headers.get('X-Admin-Password', '')
     if admin_pass:
         password_hash = hashlib.sha256(admin_pass.encode()).hexdigest()
@@ -61,6 +59,13 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ─── GROQ CLIENT ───
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+groq_client = OpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1"
+) if GROQ_API_KEY else None
 
 
 # ─── SERVE FRONTEND ───
@@ -105,7 +110,7 @@ def init_db():
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 📊 ANALYTICS ENDPOINTS
+# 📊 ANALYTICS
 # ═══════════════════════════════════════════════════════════════════
 
 @app.route('/api/track-view', methods=['POST'])
@@ -133,19 +138,14 @@ def get_analytics():
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
-
         cursor.execute("SELECT COUNT(*) FROM page_views")
         total_views = cursor.fetchone()[0]
-
         cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at::date = CURRENT_DATE")
         views_today = cursor.fetchone()[0]
-
         cursor.execute("SELECT COUNT(*) FROM page_views WHERE viewed_at >= NOW() - INTERVAL '7 days'")
         views_week = cursor.fetchone()[0]
-
         cursor.close()
         conn.close()
-
         return jsonify({
             "total_views": total_views,
             "views_today": views_today,
@@ -314,7 +314,7 @@ def delete_paper(filename):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 🤖 AI QUESTION GENERATOR (GEMINI VISION + CACHING)
+# 🤖 AI QUESTION GENERATOR (GROQ)
 # ═══════════════════════════════════════════════════════════════════
 
 @app.route('/generate-questions/<filename>', methods=['POST'])
@@ -339,7 +339,13 @@ def generate_questions(filename):
             print(f"Serving cached questions for {filename}")
             return build_pdf_response(cached_questions)
 
-        # 2. DOWNLOAD PDF
+        # 2. CHECK GROQ CLIENT
+        if groq_client is None:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "no_key", "message": "GROQ_API_KEY not set on server."}), 500
+
+        # 3. DOWNLOAD PDF
         print(f"Generating new questions for {filename}...")
         pdf_response = req.get(supabase_url, stream=True)
         if pdf_response.status_code != 200:
@@ -350,7 +356,7 @@ def generate_questions(filename):
         pdf_bytes = pdf_response.raw.read(10 * 1024 * 1024)
         del pdf_response
 
-        # 3. TEXT EXTRACTION
+        # 4. TEXT EXTRACTION
         pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
         for page in pdf_reader.pages[:5]:
@@ -358,23 +364,10 @@ def generate_questions(filename):
             if extracted:
                 text += extracted
 
-        # 4. GROQ CLIENT
-        from openai import OpenAI
-        groq_key = os.getenv("GROQ_API_KEY")
-        if not groq_key:
-            cursor.close()
-            conn.close()
-            return jsonify({"error": "no_key", "message": "Server config error: GROQ_API_KEY missing."}), 500
-
-        client = OpenAI(
-            api_key=groq_key,
-            base_url="https://api.groq.com/openai/v1"
-        )
-
         ai_text = None
         last_error = None
 
-        # Models to try in order (Groq's current vision-capable models)
+        # 5. MODELS TO TRY
         models_to_try = [
             "meta-llama/llama-4-maverick-17b-128e-instruct",
             "meta-llama/llama-4-scout-17b-16e-instruct",
@@ -403,7 +396,7 @@ Generate 10 questions:"""
                 if ai_text:
                     break
                 try:
-                    response = client.chat.completions.create(
+                    response = groq_client.chat.completions.create(
                         model=model_name,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.7,
@@ -414,7 +407,7 @@ Generate 10 questions:"""
                     break
                 except Exception as e:
                     last_error = str(e)
-                    print(f"{model_name} failed: {last_error[:100]}")
+                    print(f"{model_name} failed: {last_error[:150]}")
                     continue
 
         # CASE B: SCANNED PDF (VISION)
@@ -422,7 +415,6 @@ Generate 10 questions:"""
             print("Scanned PDF detected. Using vision prompt.")
             try:
                 from pdf2image import convert_from_bytes
-                import base64
 
                 images = convert_from_bytes(pdf_bytes, first_page=1, last_page=2, dpi=120)
                 content_parts = [{
@@ -443,7 +435,7 @@ Generate 10 questions:"""
                     if ai_text:
                         break
                     try:
-                        response = client.chat.completions.create(
+                        response = groq_client.chat.completions.create(
                             model=model_name,
                             messages=[{"role": "user", "content": content_parts}],
                             temperature=0.7,
@@ -454,7 +446,7 @@ Generate 10 questions:"""
                         break
                     except Exception as e:
                         last_error = str(e)
-                        print(f"Vision {model_name} failed: {last_error[:100]}")
+                        print(f"Vision {model_name} failed: {last_error[:150]}")
                         continue
             except Exception as e:
                 print(f"Image conversion failed: {e}")
@@ -462,17 +454,17 @@ Generate 10 questions:"""
                 conn.close()
                 return jsonify({"error": "ocr_failed", "message": f"Could not read PDF: {str(e)[:100]}"}), 500
 
-        # 5. HANDLE FAILURE
+        # 6. HANDLE FAILURE
         if ai_text is None:
             cursor.close()
             conn.close()
             return jsonify({
                 "error": "ai_busy",
-                "message": "Groq's AI is currently overloaded. Please try again in a minute.",
-                "debug": last_error[:200] if last_error else "no response"
+                "message": "Groq's AI is currently busy. Please try again in a minute.",
+                "debug": (last_error[:200] if last_error else "no response")
             }), 503
 
-        # 6. CACHE RESULT
+        # 7. CACHE RESULT
         cursor.execute(
             "UPDATE papers SET generated_questions = %s WHERE filename = %s",
             (ai_text, filename)
@@ -489,7 +481,7 @@ Generate 10 questions:"""
         return jsonify({"error": "ai_failed", "message": str(e)[:150]}), 500
 
 
-# ─── HELPER: BUILD PDF FROM AI TEXT ───
+# ─── HELPER: BUILD PDF ───
 def build_pdf_response(ai_text):
     bad_phrases = ["shown below", "shown above", "the figure", "the diagram", "in the image"]
     lines = ai_text.split('\n')
