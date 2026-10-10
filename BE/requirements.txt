@@ -2,11 +2,12 @@ Flask
 Flask-CORS
 gunicorn
 Flask-Limiter
+limits
 supabase
 psycopg2-binary
 python-dotenv
 requests
-google-genai
 pypdf
 fpdf2
+openai
 pdf2image
