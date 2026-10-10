@@ -16,6 +16,8 @@ import requests as req
 import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
+import base64
+openai
 
 load_dotenv()
 
