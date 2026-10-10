@@ -356,28 +356,32 @@ def generate_questions(filename):
             if extracted:
                 text += extracted
 
-        # 4. GEMINI SETUP
-        from google import genai
-
-        GEMINI_KEYS = [
-            os.getenv("GEMINI_API_KEY"),
-            os.getenv("GEMINI_API_KEY_2"),
-            os.getenv("GEMINI_API_KEY_3"),
-        ]
-        GEMINI_KEYS = [k for k in GEMINI_KEYS if k]
-
-        if not GEMINI_KEYS:
+        # 4. GROQ CLIENT
+        from openai import OpenAI
+        groq_key = os.getenv("GROQ_API_KEY")
+        if not groq_key:
             cursor.close()
             conn.close()
-            return jsonify({"error": "no_keys", "message": "Server config error: No API keys."}), 500
+            return jsonify({"error": "no_key", "message": "Server config error: GROQ_API_KEY missing."}), 500
+
+        client = OpenAI(
+            api_key=groq_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
 
         ai_text = None
         last_error = None
-        models_to_try = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash"]
+
+        # Models to try in order (Groq's current vision-capable models)
+        models_to_try = [
+            "meta-llama/llama-4-maverick-17b-128e-instruct",
+            "meta-llama/llama-4-scout-17b-16e-instruct",
+            "qwen/qwen3-32b"
+        ]
 
         # CASE A: DIGITAL PDF
         if len(text.strip()) > 50:
-            print("Digital PDF detected. Using text extraction.")
+            print("Digital PDF detected. Using text prompt.")
             text = text[:3000]
             prompt = f"""Read the exam paper content below and generate 10 short practice questions (one line each).
 
@@ -396,59 +400,60 @@ Generate 10 questions:"""
             for model_name in models_to_try:
                 if ai_text:
                     break
-                for i, key in enumerate(GEMINI_KEYS):
-                    try:
-                        client = genai.Client(api_key=key)
-                        response = client.models.generate_content(
-                            model=model_name,
-                            contents=prompt
-                        )
-                        ai_text = response.text
-                        print(f"Success with {model_name}, key #{i+1}")
-                        break
-                    except Exception as e:
-                        last_error = str(e)
-                        print(f"{model_name} | Key #{i+1} failed: {last_error[:80]}")
-                        continue
-                if not ai_text:
-                    time.sleep(random.uniform(2, 5))
+                try:
+                    response = client.chat.completions.create(
+                        model=model_name,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7,
+                        max_tokens=800
+                    )
+                    ai_text = response.choices[0].message.content
+                    print(f"Success with {model_name}")
+                    break
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"{model_name} failed: {last_error[:100]}")
+                    continue
 
-        # CASE B: SCANNED PDF (GEMINI VISION)
+        # CASE B: SCANNED PDF (VISION)
         else:
-            print("Scanned PDF detected. Converting to images for Gemini Vision.")
+            print("Scanned PDF detected. Using vision prompt.")
             try:
                 from pdf2image import convert_from_bytes
-                images = convert_from_bytes(pdf_bytes, first_page=1, last_page=3, dpi=150)
+                import base64
 
-                prompt_parts = [
-                    "Read the exam paper images below and generate 10 short practice questions (one line each).",
-                    "Rules: Output ONLY 10 numbered questions (1 to 10). Write in PLAIN ENGLISH. Use 'ohm' not Ω. Do NOT use LaTeX or special symbols. Do NOT refer to diagrams or figures. Each question must be self-contained."
-                ]
+                images = convert_from_bytes(pdf_bytes, first_page=1, last_page=2, dpi=120)
+                content_parts = [{
+                    "type": "text",
+                    "text": "Read the exam paper images below and generate 10 short practice questions (one line each). Output ONLY 10 numbered questions. Write in PLAIN ENGLISH. Do NOT use LaTeX or special symbols. Do NOT refer to diagrams or figures. Each question must be self-contained."
+                }]
 
                 for img in images:
                     img_byte_arr = io.BytesIO()
-                    img.save(img_byte_arr, format='JPEG')
-                    prompt_parts.append(img_byte_arr.getvalue())
+                    img.save(img_byte_arr, format='JPEG', quality=70)
+                    b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
 
                 for model_name in models_to_try:
                     if ai_text:
                         break
-                    for i, key in enumerate(GEMINI_KEYS):
-                        try:
-                            client = genai.Client(api_key=key)
-                            response = client.models.generate_content(
-                                model=model_name,
-                                contents=prompt_parts
-                            )
-                            ai_text = response.text
-                            print(f"Vision Success with {model_name}, key #{i+1}")
-                            break
-                        except Exception as e:
-                            last_error = str(e)
-                            print(f"Vision {model_name} | Key #{i+1} failed: {last_error[:80]}")
-                            continue
-                    if not ai_text:
-                        time.sleep(random.uniform(2, 5))
+                    try:
+                        response = client.chat.completions.create(
+                            model=model_name,
+                            messages=[{"role": "user", "content": content_parts}],
+                            temperature=0.7,
+                            max_tokens=800
+                        )
+                        ai_text = response.choices[0].message.content
+                        print(f"Vision Success with {model_name}")
+                        break
+                    except Exception as e:
+                        last_error = str(e)
+                        print(f"Vision {model_name} failed: {last_error[:100]}")
+                        continue
             except Exception as e:
                 print(f"Image conversion failed: {e}")
                 cursor.close()
@@ -461,7 +466,8 @@ Generate 10 questions:"""
             conn.close()
             return jsonify({
                 "error": "ai_busy",
-                "message": "Google's AI is currently overloaded. Please try again in 2 minutes."
+                "message": "Groq's AI is currently overloaded. Please try again in a minute.",
+                "debug": last_error[:200] if last_error else "no response"
             }), 503
 
         # 6. CACHE RESULT
