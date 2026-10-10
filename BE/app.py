@@ -408,6 +408,7 @@ Generate 10 questions:"""
                 except Exception as e:
                     last_error = str(e)
                     print(f"{model_name} failed: {last_error[:150]}")
+                    time.sleep(15)
                     continue
 
         # CASE B: SCANNED PDF (VISION)
@@ -447,6 +448,7 @@ Generate 10 questions:"""
                     except Exception as e:
                         last_error = str(e)
                         print(f"Vision {model_name} failed: {last_error[:150]}")
+                        time.sleep(15)
                         continue
             except Exception as e:
                 print(f"Image conversion failed: {e}")
