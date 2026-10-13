@@ -17,7 +17,8 @@ import requests as req
 import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
-from freeflow_llm import FreeFlowClient
+from openai import OpenAI
+from google import genai
 
 load_dotenv()
 
@@ -59,6 +60,10 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ─── API KEYS ───
+GROQ_KEY = os.getenv("GROQ_API_KEY")
+GEMINI_KEYS = [k.strip() for k in (os.getenv("GEMINI_API_KEY") or "").split(",") if k.strip()]
 
 
 # ─── SERVE FRONTEND ───
@@ -307,7 +312,87 @@ def delete_paper(filename):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 🤖 AI QUESTION GENERATOR (GROQ + GEMINI FALLBACK)
+# 🤖 AI FALLBACK HELPERS
+# ═══════════════════════════════════════════════════════════════════
+
+def try_groq_text(prompt):
+    """Try Groq with text prompt."""
+    if not GROQ_KEY:
+        return None, "No GROQ_API_KEY set"
+    try:
+        client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1")
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=800
+        )
+        return response.choices[0].message.content, None
+    except Exception as e:
+        return None, f"Groq text failed: {str(e)[:150]}"
+
+
+def try_groq_vision(content_parts):
+    """Try Groq with vision (image) input."""
+    if not GROQ_KEY:
+        return None, "No GROQ_API_KEY set"
+    try:
+        client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1")
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            messages=[{"role": "user", "content": content_parts}],
+            temperature=0.7,
+            max_tokens=800
+        )
+        return response.choices[0].message.content, None
+    except Exception as e:
+        return None, f"Groq vision failed: {str(e)[:150]}"
+
+
+def try_gemini_text(prompt):
+    """Try each Gemini key in order until one succeeds."""
+    if not GEMINI_KEYS:
+        return None, "No GEMINI_API_KEY set"
+    last_error = None
+    for i, key in enumerate(GEMINI_KEYS):
+        try:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            return response.text, None
+        except Exception as e:
+            last_error = f"Gemini key #{i+1} failed: {str(e)[:120]}"
+            print(last_error)
+            time.sleep(2)
+            continue
+    return None, last_error
+
+
+def try_gemini_vision(content_parts):
+    """Try each Gemini key in order for vision input."""
+    if not GEMINI_KEYS:
+        return None, "No GEMINI_API_KEY set"
+    last_error = None
+    for i, key in enumerate(GEMINI_KEYS):
+        try:
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=content_parts
+            )
+            return response.text, None
+        except Exception as e:
+            last_error = f"Gemini vision key #{i+1} failed: {str(e)[:120]}"
+            print(last_error)
+            time.sleep(2)
+            continue
+    return None, last_error
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 🤖 AI QUESTION GENERATOR (GROQ → GEMINI FALLBACK)
 # ═══════════════════════════════════════════════════════════════════
 
 @app.route('/generate-questions/<filename>', methods=['POST'])
@@ -354,7 +439,7 @@ def generate_questions(filename):
         ai_text = None
         last_error = None
 
-        # 4. FREE-FLOW CLIENT (tries Groq first, falls back to Gemini)
+        # 4. DIGITAL PDF (TEXT) PATH
         if len(text.strip()) > 50:
             print("Digital PDF detected. Using text prompt.")
             text = text[:3000]
@@ -372,53 +457,67 @@ Paper content:
 
 Generate 10 questions:"""
 
-            try:
-                with FreeFlowClient() as client:
-                    response = client.chat(
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.7,
-                        max_tokens=800
-                    )
-                    ai_text = response.content
-                    print(f"Success with provider: {response.provider}")
-            except Exception as e:
-                last_error = str(e)
-                print(f"All providers failed: {last_error[:150]}")
+            # Try Groq first
+            ai_text, err = try_groq_text(prompt)
+            if ai_text:
+                print("Success with Groq (text)")
+            else:
+                print(f"Groq text failed: {err}")
+                last_error = err
+                # Fall back to Gemini
+                ai_text, err = try_gemini_text(prompt)
+                if ai_text:
+                    print("Success with Gemini (text)")
+                else:
+                    last_error = err
 
-        # CASE B: SCANNED PDF (VISION)
+        # 5. SCANNED PDF (VISION) PATH
         else:
             print("Scanned PDF detected. Using vision prompt.")
             try:
                 from pdf2image import convert_from_bytes
 
                 images = convert_from_bytes(pdf_bytes, first_page=1, last_page=2, dpi=120)
-                content_parts = [{
-                    "type": "text",
-                    "text": "Read the exam paper images below and generate 10 short practice questions (one line each). Output ONLY 10 numbered questions. Write in PLAIN ENGLISH. Do NOT use LaTeX or special symbols. Do NOT refer to diagrams or figures. Each question must be self-contained."
-                }]
+                vision_prompt = "Read the exam paper images below and generate 10 short practice questions (one line each). Output ONLY 10 numbered questions. Write in PLAIN ENGLISH. Do NOT use LaTeX or special symbols. Do NOT refer to diagrams or figures. Each question must be self-contained."
 
+                # Build Groq-style content parts
+                groq_parts = [{"type": "text", "text": vision_prompt}]
                 for img in images:
                     img_byte_arr = io.BytesIO()
                     img.save(img_byte_arr, format='JPEG', quality=70)
                     b64 = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
-                    content_parts.append({
+                    groq_parts.append({
                         "type": "image_url",
                         "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
                     })
 
-                with FreeFlowClient() as client:
-                    response = client.chat(
-                        messages=[{"role": "user", "content": content_parts}],
-                        temperature=0.7,
-                        max_tokens=800
-                    )
-                    ai_text = response.content
-                    print(f"Vision success with provider: {response.provider}")
-            except Exception as e:
-                last_error = str(e)
-                print(f"Vision providers failed: {last_error[:150]}")
+                # Try Groq first
+                ai_text, err = try_groq_vision(groq_parts)
+                if ai_text:
+                    print("Success with Groq (vision)")
+                else:
+                    print(f"Groq vision failed: {err}")
+                    last_error = err
 
-        # 5. HANDLE FAILURE
+                    # Fall back to Gemini
+                    gemini_parts = [vision_prompt]
+                    for img in images:
+                        img_byte_arr = io.BytesIO()
+                        img.save(img_byte_arr, format='JPEG', quality=70)
+                        gemini_parts.append(img_byte_arr.getvalue())
+
+                    ai_text, err = try_gemini_vision(gemini_parts)
+                    if ai_text:
+                        print("Success with Gemini (vision)")
+                    else:
+                        last_error = err
+            except Exception as e:
+                print(f"Image conversion failed: {e}")
+                cursor.close()
+                conn.close()
+                return jsonify({"error": "ocr_failed", "message": f"Could not read PDF: {str(e)[:100]}"}), 500
+
+        # 6. HANDLE FAILURE
         if ai_text is None:
             cursor.close()
             conn.close()
@@ -428,7 +527,7 @@ Generate 10 questions:"""
                 "debug": (last_error[:200] if last_error else "no response")
             }), 503
 
-        # 6. CACHE RESULT
+        # 7. CACHE RESULT
         cursor.execute(
             "UPDATE papers SET generated_questions = %s WHERE filename = %s",
             (ai_text, filename)
