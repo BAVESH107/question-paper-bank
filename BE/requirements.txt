@@ -11,3 +11,4 @@ pypdf
 fpdf2
 openai
 pdf2image
+freeflow-lim

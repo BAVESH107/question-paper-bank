@@ -17,7 +17,7 @@ import requests as req
 import pypdf
 from fpdf import FPDF
 from dotenv import load_dotenv
-from openai import OpenAI
+from freeflow_llm import FreeFlowClient
 
 load_dotenv()
 
@@ -59,13 +59,6 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ─── GROQ CLIENT ───
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-groq_client = OpenAI(
-    api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1"
-) if GROQ_API_KEY else None
 
 
 # ─── SERVE FRONTEND ───
@@ -314,7 +307,7 @@ def delete_paper(filename):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 🤖 AI QUESTION GENERATOR (GROQ)
+# 🤖 AI QUESTION GENERATOR (GROQ + GEMINI FALLBACK)
 # ═══════════════════════════════════════════════════════════════════
 
 @app.route('/generate-questions/<filename>', methods=['POST'])
@@ -339,13 +332,7 @@ def generate_questions(filename):
             print(f"Serving cached questions for {filename}")
             return build_pdf_response(cached_questions)
 
-        # 2. CHECK GROQ CLIENT
-        if groq_client is None:
-            cursor.close()
-            conn.close()
-            return jsonify({"error": "no_key", "message": "GROQ_API_KEY not set on server."}), 500
-
-        # 3. DOWNLOAD PDF
+        # 2. DOWNLOAD PDF
         print(f"Generating new questions for {filename}...")
         pdf_response = req.get(supabase_url, stream=True)
         if pdf_response.status_code != 200:
@@ -356,7 +343,7 @@ def generate_questions(filename):
         pdf_bytes = pdf_response.raw.read(10 * 1024 * 1024)
         del pdf_response
 
-        # 4. TEXT EXTRACTION
+        # 3. TEXT EXTRACTION
         pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         text = ""
         for page in pdf_reader.pages[:5]:
@@ -367,14 +354,7 @@ def generate_questions(filename):
         ai_text = None
         last_error = None
 
-        # 5. MODELS TO TRY
-        models_to_try = [
-            "meta-llama/llama-4-maverick-17b-128e-instruct",
-            "meta-llama/llama-4-scout-17b-16e-instruct",
-            "qwen/qwen3-32b"
-        ]
-
-        # CASE A: DIGITAL PDF
+        # 4. FREE-FLOW CLIENT (tries Groq first, falls back to Gemini)
         if len(text.strip()) > 50:
             print("Digital PDF detected. Using text prompt.")
             text = text[:3000]
@@ -392,24 +372,18 @@ Paper content:
 
 Generate 10 questions:"""
 
-            for model_name in models_to_try:
-                if ai_text:
-                    break
-                try:
-                    response = groq_client.chat.completions.create(
-                        model=model_name,
+            try:
+                with FreeFlowClient() as client:
+                    response = client.chat(
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.7,
                         max_tokens=800
                     )
-                    ai_text = response.choices[0].message.content
-                    print(f"Success with {model_name}")
-                    break
-                except Exception as e:
-                    last_error = str(e)
-                    print(f"{model_name} failed: {last_error[:150]}")
-                    time.sleep(15)
-                    continue
+                    ai_text = response.content
+                    print(f"Success with provider: {response.provider}")
+            except Exception as e:
+                last_error = str(e)
+                print(f"All providers failed: {last_error[:150]}")
 
         # CASE B: SCANNED PDF (VISION)
         else:
@@ -432,41 +406,29 @@ Generate 10 questions:"""
                         "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
                     })
 
-                for model_name in models_to_try:
-                    if ai_text:
-                        break
-                    try:
-                        response = groq_client.chat.completions.create(
-                            model=model_name,
-                            messages=[{"role": "user", "content": content_parts}],
-                            temperature=0.7,
-                            max_tokens=800
-                        )
-                        ai_text = response.choices[0].message.content
-                        print(f"Vision Success with {model_name}")
-                        break
-                    except Exception as e:
-                        last_error = str(e)
-                        print(f"Vision {model_name} failed: {last_error[:150]}")
-                        time.sleep(15)
-                        continue
+                with FreeFlowClient() as client:
+                    response = client.chat(
+                        messages=[{"role": "user", "content": content_parts}],
+                        temperature=0.7,
+                        max_tokens=800
+                    )
+                    ai_text = response.content
+                    print(f"Vision success with provider: {response.provider}")
             except Exception as e:
-                print(f"Image conversion failed: {e}")
-                cursor.close()
-                conn.close()
-                return jsonify({"error": "ocr_failed", "message": f"Could not read PDF: {str(e)[:100]}"}), 500
+                last_error = str(e)
+                print(f"Vision providers failed: {last_error[:150]}")
 
-        # 6. HANDLE FAILURE
+        # 5. HANDLE FAILURE
         if ai_text is None:
             cursor.close()
             conn.close()
             return jsonify({
                 "error": "ai_busy",
-                "message": "Groq's AI is currently busy. Please try again in a minute.",
+                "message": "All AI providers are currently busy. Please try again in a minute.",
                 "debug": (last_error[:200] if last_error else "no response")
             }), 503
 
-        # 7. CACHE RESULT
+        # 6. CACHE RESULT
         cursor.execute(
             "UPDATE papers SET generated_questions = %s WHERE filename = %s",
             (ai_text, filename)
