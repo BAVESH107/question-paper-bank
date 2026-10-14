@@ -322,7 +322,7 @@ def try_groq_text(prompt):
     try:
         client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1")
         response = client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            model="qwen/qwen3.8-27b",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=800
@@ -339,7 +339,7 @@ def try_groq_vision(content_parts):
     try:
         client = OpenAI(api_key=GROQ_KEY, base_url="https://api.groq.com/openai/v1")
         response = client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+            model="qwen/qwen3.8-27b",
             messages=[{"role": "user", "content": content_parts}],
             temperature=0.7,
             max_tokens=800
@@ -358,7 +358,7 @@ def try_gemini_text(prompt):
         try:
             client = genai.Client(api_key=key)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 contents=prompt
             )
             return response.text, None
@@ -379,7 +379,7 @@ def try_gemini_vision(content_parts):
         try:
             client = genai.Client(api_key=key)
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.6-flash",
                 contents=content_parts
             )
             return response.text, None
