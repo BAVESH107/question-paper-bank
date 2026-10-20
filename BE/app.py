@@ -450,7 +450,8 @@ Rules:
 - Focus only on academic topics being tested in the questions.
 - Generate 10 new and subject related questions. Don't just copy the paper.
 - Output ONLY 10 numbered questions (1 to 10).
-- Write in PLAIN ENGLISH. Use "ohm" not Ω.
+- Write in PLAIN ENGLISH. Use "ohm" not Ω use standard math symbols (+,-,=,x,/,%,^)for equations.
+- Do not spell out maths(for example: write x+y+z instead of x plus y plus z).
 - Do NOT use LaTeX or special symbols.
 - Do NOT refer to diagrams or figures.
 - If a question requires a diagram to solve, SKIP IT and find a text based question instead.
