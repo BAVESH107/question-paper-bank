@@ -453,7 +453,7 @@ Rules:
 - Write in PLAIN ENGLISH. Use "ohm" not Ω use standard math symbols (+,-,=,x,/,%,^)for equations.
 - Do not spell out maths(for example: write x+y+z instead of x plus y plus z).
 - Do NOT use LaTeX or special symbols.
-- Provide numericals or equations to solve which are solvable without refering to any diagrams.
+- Provide numericals or equations to solve which are solvable without refering to any diagrams if there are multiple rows, columns, equations, seperate them with "|".
 - Do NOT refer to diagrams or figures.
 - If a question requires a diagram to solve, SKIP IT and find a text based question instead.
 - Every question must be 100% solvable using only the text provided.
