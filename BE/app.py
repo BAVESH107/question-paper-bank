@@ -450,12 +450,14 @@ Rules:
 - Write in PLAIN ENGLISH. Use "ohm" not Ω.
 - Do NOT use LaTeX or special symbols.
 - Do NOT refer to diagrams or figures.
+- If a question requires a diagram to solve, SKIP IT and find a text based question instead.
+- Every question must be 100% solvable using only the text provided.
 - Each question must be self-contained.
 
 Paper content:
 {text}
 
-Generate 10 questions:"""
+Generate 10 text-only questions:"""
 
             # Try Groq first
             ai_text, err = try_groq_text(prompt)
