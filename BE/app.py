@@ -450,10 +450,14 @@ Rules:
 - Focus only on academic topics being tested in the questions.
 - Generate 10 new and subject related questions. Don't just copy the paper.
 - Output ONLY 10 numbered questions (1 to 10).
-- Write in PLAIN ENGLISH. Use "ohm" not Ω use standard math symbols (+,-,=,x,/,%,^)for equations.
+- Write in PLAIN ENGLISH for text parts. Use "ohm" not Ω use standard math symbols (+,-,=,x,/,%,^)for equations.
 - Do not spell out maths(for example: write x+y+z instead of x plus y plus z).
-- Do NOT use LaTeX or special symbols.
-- Provide numericals or equations to solve which are solvable without refering to any diagrams if there are multiple rows, columns, equations, seperate them with "|".
+- DO: "x+y+z".
+- DO: "[[1,2],[3,4]]".
+- DON'T: "x plus y plus z".
+- DON'T: "matrix with rows 1,2 and 3,4 and 4,5."
+- Do NOT use LaTeX formatting (no \frac,\begin, or \end).
+- Provide numericals or equations to solve which are solvable without refering to any diagrams.
 - Do NOT refer to diagrams or figures.
 - If a question requires a diagram to solve, SKIP IT and find a text based question instead.
 - Every question must be 100% solvable using only the text provided.
