@@ -453,6 +453,8 @@ Rules:
 - If a question requires a diagram to solve, SKIP IT and find a text based question instead.
 - Every question must be 100% solvable using only the text provided.
 - Each question must be self-contained.
+- Do not ask for course outcomes or anything out of questions.
+-Analyse the questions and generated extra questions related to the exam type and questions provided.
 
 Paper content:
 {text}
