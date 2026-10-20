@@ -443,9 +443,12 @@ def generate_questions(filename):
         if len(text.strip()) > 50:
             print("Digital PDF detected. Using text prompt.")
             text = text[:3000]
-            prompt = f"""Read the exam paper content below and generate 10 short practice questions (one line each).
+            prompt = f"""You are an expert college professor. Read the exam paper content below and generate 10 short practice questions (one line each).
 
 Rules:
+- Ignore all formatting,headers, tables,makrs and codes(like CO1,CO2,CO3,L1,L2,L3). Do not generate questions asking what these codes are.
+- Focus only on academic topics being tested in the questions.
+- Generate 10 new and subject related questions. Don't just copy the paper.
 - Output ONLY 10 numbered questions (1 to 10).
 - Write in PLAIN ENGLISH. Use "ohm" not Ω.
 - Do NOT use LaTeX or special symbols.
